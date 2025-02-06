@@ -172,9 +172,9 @@ class Fish:
         self.impulse_vector_y = 0
 
 
-        self.chosen_math_library = cp
+        self.chosen_math_library = np
 
-        self.deterministic_action = False
+        self.deterministic_action = True
 
     def take_action(self, action):
         reward = 0

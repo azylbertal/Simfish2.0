@@ -1,7 +1,7 @@
 {
     "arena_width": 1500,
     "arena_height": 1500,
-    "num_actions": 12,
+    "num_actions": 6,
     "drag": 0.7,
     "phys_dt": 0.2,
     "phys_steps_per_sim_step": 100,
@@ -98,7 +98,7 @@
     "salt": true,
     "salt_concentration_decay": 0.002,
     "salt_recovery": 0.005,
-    "max_salt_damage": 0.02,
+    "max_salt_damage": 0.0,
     "action_energy_use_scaling": "Sublinear",
     "i_scaling_energy_cost": 0.00015,
     "a_scaling_energy_cost": 0.00015,
@@ -109,5 +109,6 @@
     "max_current_strength": 0.04,
     "current_width": 0.2,
     "current_strength_variance": 1,
-    "unit_circle_diameter": 0.7
+    "unit_circle_diameter": 0.7,
+    "max_epLength": 1000
 }

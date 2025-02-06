@@ -9,7 +9,7 @@ class Eye:
     def __init__(self, board, verg_angle, retinal_field, is_left, env_variables, dark_col, max_visual_range,
                  plot_rfs=False):
         # Use CUPY if using GPU.
-        self.chosen_math_library = cp
+        self.chosen_math_library = np
 
         self.uv_object_intensity = env_variables["uv_object_intensity"]
         self.board = board
@@ -201,18 +201,20 @@ class Eye:
         """
         # UV Angles with respect to fish (doubled) (PR_N x n)
 
-        photoreceptor_angles_surrounding = self.photoreceptor_angles_surrounding_stacked + fish_angle
-        uv_arena_pixels = masked_arena_pixels[:, :, 1:2]
-        red_arena_pixels = self.chosen_math_library.concatenate(
-            (masked_arena_pixels[:, :, 0:1], masked_arena_pixels[:, :, 2:]), axis=2)
-        uv_readings, red_readings = self._read_stacked(masked_arena_pixels_uv=uv_arena_pixels,
-                                                       masked_arena_pixels_red=red_arena_pixels,
-                                                       eye_x=eye_x,
-                                                       eye_y=eye_y,
-                                                       photoreceptor_angles_surrounding=photoreceptor_angles_surrounding,
-                                                       n_photoreceptors_uv=self.uv_photoreceptor_num,
-                                                       n_photoreceptors_red=self.red_photoreceptor_num)
+        # photoreceptor_angles_surrounding = self.photoreceptor_angles_surrounding_stacked + fish_angle
+        # uv_arena_pixels = masked_arena_pixels[:, :, 1:2]
+        # red_arena_pixels = self.chosen_math_library.concatenate(
+        #     (masked_arena_pixels[:, :, 0:1], masked_arena_pixels[:, :, 2:]), axis=2)
+        # uv_readings, red_readings = self._read_stacked(masked_arena_pixels_uv=uv_arena_pixels,
+        #                                                masked_arena_pixels_red=red_arena_pixels,
+        #                                                eye_x=eye_x,
+        #                                                eye_y=eye_y,
+        #                                                photoreceptor_angles_surrounding=photoreceptor_angles_surrounding,
+        #                                                n_photoreceptors_uv=self.uv_photoreceptor_num,
+        #                                                n_photoreceptors_red=self.red_photoreceptor_num)
 
+        uv_readings = self.chosen_math_library.zeros((self.uv_photoreceptor_num, 1))
+        red_readings = self.chosen_math_library.zeros((self.red_photoreceptor_num, 2))
         if len(sand_grain_positions) > 0:
             uv_items = np.concatenate((prey_positions, sand_grain_positions), axis=0)
         else:
@@ -229,7 +231,6 @@ class Eye:
             proj_uv_readings *= self.uv_object_intensity
 
             uv_readings += proj_uv_readings
-
             if len(sand_grain_positions) > 0:
                 red_readings_sand_grains = self._read_prey_proj(eye_x=eye_x,
                                                                 eye_y=eye_y,
@@ -258,8 +259,9 @@ class Eye:
 
         self.readings = self.chosen_math_library.concatenate(
             (interp_red_readings[:, 0:1], interp_uv_readings, interp_red_readings[:, 1:]), axis=1)
-
-        self.readings = self.readings.get()
+        
+        if self.chosen_math_library == cp:
+            self.readings = self.readings.get()
 
     def _read_prey_proj(self, eye_x, eye_y, uv_pr_angles, fish_angle, rf_size, lum_mask, prey_pos):
         """Reads the prey projection for the given eye position and fish angle.

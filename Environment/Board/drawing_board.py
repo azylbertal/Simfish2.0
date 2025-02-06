@@ -71,7 +71,7 @@ class DrawingBoard:
         self.red_object_intensity = red_object_intensity
         self.red2_object_intensity = red2_object_intensity
 
-        self.chosen_math_library = cp
+        self.chosen_math_library = np
 
         self.arena_width = arena_width
         self.arena_height = arena_height
@@ -86,9 +86,9 @@ class DrawingBoard:
         self.max_visual_distance = max_visual_distance
         self.fish_position_FOV = self.chosen_math_library.array([self.max_visual_distance, self.max_visual_distance])
 
-        self.base_db = self.get_base_arena()
-        self.base_db_illuminated = self.get_base_arena(visible_scatter)
-        self.erase(visible_scatter)
+        #self.base_db = self.get_base_arena()
+        #self.base_db_illuminated = self.get_base_arena(visible_scatter)
+        #self.erase(visible_scatter)
         
         # Repeated computations for sediment
         self.turbPower = 1.0
@@ -599,23 +599,25 @@ class DrawingBoard:
 
         return A
 
-    def get_masked_pixels(self, fish_position, prey_locations, predator_locations):
+    def get_masked_pixels(self, fish_position, prey_locations, predator_locations, return_only_luminance=False):
         """
         Returns masked pixels in form W.H.3
         With Red.UV.Red2
         """
-        try:
-            A = self.chosen_math_library.array(self.local_db)
-        except ValueError:
-            print(self.local_db)
 
         # apply FOV portion of luminance mask
-        local_luminance_mask = self.chosen_math_library.zeros(self.local_db.shape)
+        local_luminance_mask = self.chosen_math_library.zeros((self.local_dim, self.local_dim, 3))
         lum_slice = self.global_luminance_mask[self.FOV.enclosed_fov_top:self.FOV.enclosed_fov_bottom,
                                                self.FOV.enclosed_fov_left:self.FOV.enclosed_fov_right, :]
         local_luminance_mask[self.FOV.local_fov_top:self.FOV.local_fov_bottom,
                              self.FOV.local_fov_left:self.FOV.local_fov_right] = lum_slice
-
+        if return_only_luminance:
+            return local_luminance_mask[:, :, 1] * self.local_scatter_base
+        
+        try:
+            A = self.chosen_math_library.array(self.local_db)
+        except ValueError:
+            print(self.local_db)
         A *= local_luminance_mask
 
         # If FOV extends outside the arena, extend the A image

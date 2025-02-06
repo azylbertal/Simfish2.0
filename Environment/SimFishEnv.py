@@ -4,24 +4,22 @@ import numpy as np
 import pymunk
 import dm_env
 from dm_env import specs
+import time
 
 from Environment.Board.drawing_board import DrawingBoard
 from Environment.Fish.fish import Fish
-from typing import NamedTuple
+from acme.wrappers import observation_action_reward
 
-from acme import types
+OAR = observation_action_reward.OAR
 
-class OAR(NamedTuple):
-  """Container for (Observation, Action, Reward) tuples."""
-  observation: types.Nest
-  action: types.Nest
-  reward: types.Nest
 
 class BaseEnvironment(dm_env.Environment):
     """A base class to represent environments, for extension to ProjectionEnvironment, VVR and Naturalistic
     environment classes."""
 
     def __init__(self, env_variables):
+
+        super().__init__()
 
         self.env_variables = env_variables
         self.num_actions = self.env_variables['num_actions']
@@ -105,6 +103,8 @@ class BaseEnvironment(dm_env.Environment):
 
         self.continuous_actions = False
         self._reset_next_step = True
+        self.action_used = np.zeros(12)
+
 
 
     def reset(self) -> dm_env.TimeStep:
@@ -119,7 +119,6 @@ class BaseEnvironment(dm_env.Environment):
         self.salt_damage = 0
         self.board.light_gain = self.env_variables["light_gain"]
         self.switch_step = None
-
         # New energy system:
         self.fish.energy_level = 1
 
@@ -232,16 +231,17 @@ class BaseEnvironment(dm_env.Environment):
               Wall: {self.wall_associated_reward}
               Sand grain: {self.sand_grain_associated_reward}
               """)
-
+        print(f"actions used: {self.action_used / np.sum(self.action_used)}")
         self.energy_associated_reward = 0
         self.action_associated_reward = 0
         self.salt_associated_reward = 0
         self.predator_associated_reward = 0
         self.wall_associated_reward = 0
         self.sand_grain_associated_reward = 0
+        self.action_used = np.zeros(12)
 
         self.num_steps_prey_available = 0
-        return dm_env.restart(self.get_observation(action=0, reward=0))
+        return dm_env.restart(self.get_observation(action=0, reward=0.))
 
     def set_collisions(self):
         """Specifies the collisions that occur in the Pymunk simulation."""
@@ -937,9 +937,19 @@ class BaseEnvironment(dm_env.Environment):
             new_position = pymunk.Vec2d(np.clip(self.fish.body.position[0], 6, self.env_variables["arena_width"] - 30),
                                         np.clip(self.fish.body.position[1], 6, self.env_variables["arena_height"] - 30))
             self.fish.body.position = new_position
-
+    def get_info(self):
+        info_dict = {
+            'fish_x': [self.fish.body.position[0]],
+            'fish_y': [self.fish.body.position[1]],
+            'fish_angle': [self.fish.body.angle],
+            'prey_x': [[pr.position[0] for pr in self.prey_bodies]],
+            'prey_y': [[pr.position[1] for pr in self.prey_bodies]],
+        }
+        return info_dict
     def step(self, action: int) -> dm_env.TimeStep:
-
+        
+        self.action_used[action] += 1
+        t0 = time.time()
         if self._reset_next_step:
             return self.reset()
             
@@ -1082,9 +1092,13 @@ class BaseEnvironment(dm_env.Environment):
                 self.num_steps_prey_available += 1
 
         self.num_steps += 1
+        if self.num_steps >= self.env_variables["max_epLength"]:
+            print("Fish ran out of time")
+            done = True
+            self.recent_cause_of_death = "Time"
 
         # Drawing the features visible at this step:
-        self.draw_walls_and_sediment()
+        # self.draw_walls_and_sediment()
 
 
         # if self.assay_run_version == "Original" and self.num_steps > 2:  # Temporal conditional stops assay buffer size errors.
@@ -1092,9 +1106,9 @@ class BaseEnvironment(dm_env.Environment):
         #         print(f"Split condition met at step: {self.num_steps}")
         #         done = True
         #         self.switch_step = self.num_steps
-
         observation = self.get_observation(action, reward)
-
+        t_step = time.time() - t0
+        #print(f"Step time: {t_step}")
         if done:
             self._reset_next_step = True
             return dm_env.termination(reward=reward, observation=observation)
@@ -1112,11 +1126,12 @@ class BaseEnvironment(dm_env.Environment):
                                 self.env_variables['energy_state'] + self.env_variables['salt']
         if len_internal_state == 0:
             len_internal_state = 1
-        vis_shape = [len(self.fish.left_eye.interpolated_observation)*2, 3]
-        obs_spec = specs.Array(shape=vis_shape, dtype='float32', name="visual_input")
+        vis_shape = (len(self.fish.left_eye.interpolated_observation), 3, 2)
+        obs_spec = specs.Array(shape=vis_shape, dtype=np.float32, name="visual_input")
         return OAR(observation=obs_spec,
-            action=self.action_spec(),
-            reward=self.reward_spec())
+            action=specs.Array(shape=(), dtype=int),
+            reward=specs.Array(shape=(), dtype=np.float64),
+        )
 
 #        return specs.Array(shape=vis_shape, dtype='float32', name="visual_input")
 #        return [specs.Array(shape=vis_shape, dtype='float32', name="visual_input"),
@@ -1129,17 +1144,14 @@ class BaseEnvironment(dm_env.Environment):
             dtype=int, num_values=self.num_actions, name="action")
 
     def get_observation(self, action, reward):
+
         self.board.FOV.update_field_of_view(self.fish.body.position)
+        visual_input, _ = self.resolve_visual_input()
+        # print minimal and maximal values of visual input:
+        visual_input = visual_input.astype(np.float32)
 
-        visual_input, full_masked_image = self.resolve_visual_input()
-        # change the order of axes:
-        visual_input = np.transpose(visual_input, (0, 2, 1))
-        # reshape to mix eyes:
-        visual_input = np.reshape(visual_input, (1, -1))
-
-
-        
-        
+        # replace the visual input with a random image of the same size:
+        # visual_input = (np.random.rand(139, 3, 2)-0.5)*2
         # Calculate internal state
         internal_state = []
         internal_state_order = []
@@ -1165,7 +1177,6 @@ class BaseEnvironment(dm_env.Environment):
         if len(internal_state) == 0:
             internal_state.append(0)
         internal_state = np.array([internal_state])
-
         return OAR(observation=visual_input,action=action, reward=reward)
         #return visual_input#[visual_input, internal_state]
     
@@ -1197,11 +1208,12 @@ class BaseEnvironment(dm_env.Environment):
 
         prey_locations = [i.position for i in self.prey_bodies]
         sand_grain_locations = [i.position for i in self.sand_grain_bodies]
-        full_masked_image, lum_mask = self.board.get_masked_pixels(np.array(self.fish.body.position),
-                                                                   np.array(prey_locations + sand_grain_locations),
-                                                                   predator_bodies)
-
+        # full_masked_image, lum_mask = self.board.get_masked_pixels(np.array(self.fish.body.position),
+        #                                                            np.array(prey_locations + sand_grain_locations),
+        #                                                            predator_bodies)
+        lum_mask = self.board.get_masked_pixels(None,None,None, return_only_luminance=True)
         # Convert to FOV coordinates (to match eye coordinates)
+        full_masked_image=None
         if len(prey_locations) > 0:
             prey_locations_array = np.array(prey_locations) - np.array(self.fish.body.position) + self.board.max_visual_distance
         else:
@@ -1216,8 +1228,6 @@ class BaseEnvironment(dm_env.Environment):
                                 prey_locations_array, sand_grain_locations_array)
         self.fish.right_eye.read(full_masked_image, right_eye_pos[0], right_eye_pos[1], self.fish.body.angle, lum_mask,
                                  prey_locations_array, sand_grain_locations_array)
-
         observation = np.dstack((self.fish.readings_to_photons(self.fish.left_eye.readings),
                                  self.fish.readings_to_photons(self.fish.right_eye.readings)))
-
         return observation, full_masked_image
