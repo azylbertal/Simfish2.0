@@ -23,8 +23,6 @@ import os
 import time
 from typing import TextIO, Union
 
-from absl import logging
-
 from acme.utils import paths
 from acme.utils.loggers import base
 
@@ -85,6 +83,8 @@ class HDF5Logger(base.Logger):
             f.create_dataset(key, data=prey_array)
         else:
             f.create_dataset(key, data=value)
+    # wait to space out the writes
+    time.sleep(10 * 60)
 
   def close(self):
     pass

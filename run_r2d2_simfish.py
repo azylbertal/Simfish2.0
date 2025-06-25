@@ -35,7 +35,6 @@ from acme.utils.observers import base
 
 import logging
 from typing import Any, Callable, Dict, Generic, Iterator, Optional, Sequence
-
 from acme import core
 from acme import environment_loop
 from acme import specs
@@ -45,29 +44,66 @@ from acme.jax import utils
 from acme.utils import counting
 from acme.utils import loggers
 from acme.utils import observers as observers_lib
-from acme.utils import experiment_utils
 import jax
 from typing_extensions import Protocol
+import reverb
 
 from acme.utils.loggers import base as loggers_base
-from acme.utils.loggers import csv
 from acme.utils.loggers import filters
-from acme.utils.loggers import terminal
+from acme.jax import networks as networks_lib
 
 from hdf5_logger import HDF5Logger
+from simfish_r2d2_learner import SimfishR2D2Learner
 from acme.utils.loggers import aggregators
+from acme.agents.jax.r2d2 import learning as r2d2_learning
+from acme.agents.jax.r2d2 import networks as r2d2_networks
+import optax
 
-
+# import matplotlib
+# matplotlib.use('QtAgg')
 # Flags which modify the behavior of the launcher.
 flags.DEFINE_bool(
     'run_distributed', True, 'Should an agent be executed in a distributed '
     'way. If False, will run single-threaded.')
 flags.DEFINE_string('env_name', 'Pong', 'What environment to run.')
-flags.DEFINE_integer('seed', 0, 'Random seed (experiment).')
-flags.DEFINE_integer('num_steps', 5_000_000,
+flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
+flags.DEFINE_integer('num_steps', 25_000_000,
                      'Number of environment steps to run for.')
+#flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
 
 FLAGS = flags.FLAGS
+class SimfishR2D2Builder(r2d2.R2D2Builder):
+  def make_learner(
+      self,
+      random_key: networks_lib.PRNGKey,
+      networks: r2d2_networks.R2D2Networks,
+      dataset: Iterator[r2d2_learning.R2D2ReplaySample],
+      logger_fn: loggers.LoggerFactory,
+      environment_spec: specs.EnvironmentSpec,
+      replay_client: Optional[reverb.Client] = None,
+      counter: Optional[counting.Counter] = None,
+  ) -> core.Learner:
+    del environment_spec
+
+    # The learner updates the parameters (and initializes them).
+    return SimfishR2D2Learner(
+        networks=networks,
+        batch_size=self._batch_size_per_device,
+        random_key=random_key,
+        burn_in_length=self._config.burn_in_length,
+        discount=self._config.discount,
+        importance_sampling_exponent=(
+            self._config.importance_sampling_exponent),
+        max_priority_weight=self._config.max_priority_weight,
+        target_update_period=self._config.target_update_period,
+        iterator=dataset,
+        optimizer=optax.adam(self._config.learning_rate),
+        bootstrap_n=self._config.bootstrap_n,
+        tx_pair=self._config.tx_pair,
+        clip_rewards=self._config.clip_rewards,
+        replay_client=replay_client,
+        counter=counter,
+        logger=logger_fn('learner'))
 
 class EnvInfoKeep(base.EnvLoopObserver):
   """An observer that collects and accumulates scalars from env's info."""
@@ -80,6 +116,7 @@ class EnvInfoKeep(base.EnvLoopObserver):
       return
     info = getattr(env, 'get_info')()
     info['action'] = [int(obs.action)]
+    info['observation'] = [obs.observation]
     if not info:
       return
     for k, v in info.items():
@@ -88,7 +125,8 @@ class EnvInfoKeep(base.EnvLoopObserver):
   def observe_first(self, env: dm_env.Environment, timestep: dm_env.TimeStep
                     ) -> None:
     """Observes the initial state."""
-    self._metrics = {}
+    sediment = env.board.global_sediment_grating
+    self._metrics = {'sediment': [sediment]}
     self._accumulate_metrics(env, timestep.observation)
 
   def observe(self, env: dm_env.Environment, timestep: dm_env.TimeStep,
@@ -121,7 +159,7 @@ def build_experiment_config():
       burn_in_length=8,
       trace_length=40,
       sequence_period=20,
-      min_replay_size=10_000,
+      min_replay_size=10,#_000,
       batch_size=batch_size,
       prefetch_size=1,
       samples_per_insert=1.0,
@@ -131,7 +169,7 @@ def build_experiment_config():
       variable_update_period=100,
   )
   network_factory = make_r2d2_networks
-  builder = r2d2.R2D2Builder(config)
+  builder = SimfishR2D2Builder(config)
   def make_hdf5_logger(label: str,
                            steps_key: Optional[str] = None,
                            task_instance: int = 0) -> loggers.Logger:
@@ -254,7 +292,7 @@ def build_experiment_config():
       #logger_factory=logger_factory,
       evaluator_factories=eval_factories,
       seed=FLAGS.seed,
-      checkpointing=experiments.CheckpointingConfig(add_uid=True),
+      checkpointing=experiments.CheckpointingConfig(add_uid=False),
       max_num_actor_steps=FLAGS.num_steps)
   
 
@@ -268,11 +306,11 @@ def main(_):
   if FLAGS.run_distributed:
 
     program = experiments.make_distributed_experiment(
-        experiment=config, num_actors=15 if lp_utils.is_local_run() else 20)
+        experiment=config, num_actors=15 if lp_utils.is_local_run() else 3)
     lp.launch(program, xm_resources=lp_utils.make_xm_docker_resources(program))
   else:
     print('Running single-threaded.')
-    experiments.run_experiment(experiment=config, eval_every=5000)
+    experiments.run_experiment(experiment=config, eval_every=1)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 import numpy as np
 import pymunk
-import cupy as cp
+#import cupy as cp
 
 from Environment.Fish.eye import Eye
 
@@ -95,24 +95,22 @@ class Fish:
     Created to simplify the SimState class, while making it easier to have environments with multiple agents in future.
     """
 
-    def __init__(self, board, env_variables, dark_col):
+    def __init__(self, board, env_variables, max_uv_range):
 
         # For the purpose of producing a calibration curve.
         inertia = pymunk.moment_for_circle(env_variables['fish_mass'], 0, env_variables['fish_head_radius'], (0, 0))
-
+        self.max_uv_range = max_uv_range
         self.env_variables = env_variables
         self.body = pymunk.Body(1, inertia)
 
         # Mouth
         self.mouth = pymunk.Circle(self.body, env_variables['fish_mouth_radius'], offset=(0, 0))
-        self.mouth.color = (0, 1, 0)
         self.mouth.elasticity = 1.0
         self.mouth.collision_type = 3
 
         # Head
         self.head = pymunk.Circle(self.body, env_variables['fish_head_radius'],
                                   offset=(-env_variables['fish_head_radius'], 0))
-        self.head.color = (0, 1, 0)
         self.head.elasticity = 1.0
         self.head.collision_type = 6
 
@@ -122,7 +120,6 @@ class Fish:
                             (-env_variables['fish_head_radius'] - env_variables['fish_tail_length'], 0),
                             (-env_variables['fish_head_radius'], env_variables['fish_head_radius']))
         self.tail = pymunk.Poly(self.body, tail_coordinates)
-        self.tail.color = (0, 1, 0)
         self.tail.elasticity = 1.0
         self.tail.collision_type = 6
 
@@ -131,12 +128,11 @@ class Fish:
         self.retinal_field = env_variables['visual_field'] * (np.pi / 180)
         self.conv_state = 0
 
-        max_visual_range = np.absolute(np.log(0.001) / self.env_variables["light_decay_rate"])
 
-        self.left_eye = Eye(board, self.verg_angle, self.retinal_field, True, env_variables, dark_col,
-                            max_visual_range=max_visual_range)
-        self.right_eye = Eye(board, self.verg_angle, self.retinal_field, False, env_variables, dark_col,
-                             max_visual_range=max_visual_range)
+        self.left_eye = Eye(board, self.verg_angle, self.retinal_field, True, env_variables,
+                            max_uv_range=self.max_uv_range)
+        self.right_eye = Eye(board, self.verg_angle, self.retinal_field, False, env_variables,
+                             max_uv_range=self.max_uv_range)
 
         self.hungry = 0
         self.stress = 1
@@ -171,14 +167,13 @@ class Fish:
         self.impulse_vector_x = 0
         self.impulse_vector_y = 0
 
-
-        self.chosen_math_library = np
-
-        self.deterministic_action = True
+        self.deterministic_action = self.env_variables['deterministic_action']
 
     def take_action(self, action):
         reward = 0
-        if not action == 6:
+        if self.env_variables['test_sensory_system']:
+            self.body.angle += 0.1
+        if not (action == 6 or self.env_variables['test_sensory_system']):
             angle_change, distance, mean_angle, mean_distance = draw_angle_dist(action)
             if self.deterministic_action:
                 angle_change = mean_angle
@@ -199,7 +194,6 @@ class Fish:
             self.prev_action_impulse = 0
             self.prev_action_angle = 0
             reward = 0
-        self.head.color = (0, 1, 0)
 
 
 

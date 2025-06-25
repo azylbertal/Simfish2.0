@@ -14,27 +14,33 @@ from matplotlib.animation import FFMpegWriter
 
 class DrawingBoard:
 
-    def __init__(self, width, height, data, include_background):
-        self.width = width
-        self.height = height
+    def __init__(self, env_variables, data, include_background):
+        self.width = env_variables["arena_width"]
+        self.height = env_variables["arena_height"]
+        self.light_gradient = env_variables["light_gradient"]
+        self.dark_gain = env_variables["dark_gain"]
+        self.dark_light_ratio = env_variables["dark_light_ratio"]
+        if env_variables["test_sensory_system"]:
+            self.dark_light_ratio = 0.5
         self.include_background = include_background
         if include_background:
-            self.background = data["background"][:, :,]
+            self.background = data["sediment"][0,:, :]
             self.background = np.expand_dims(self.background/10, 2)
             self.background = np.concatenate((self.background,
-                                              self.background,
-                                              np.zeros(self.background.shape)), axis=2)
+                                             self.background,
+                                             np.zeros(self.background.shape)), axis=2)
 
         self.db = self.get_base_arena(0.3)
+        self.apply_light()
 
-    def get_base_arena(self, bkg=0.3):
+    def get_base_arena(self, bkg=0.0):
         db = (np.ones((self.height, self.width, 3), dtype=np.double) * bkg)
         db[1:2, :] = np.array([1, 0, 0])
         db[self.width - 2:self.width - 1, :] = np.array([1, 0, 0])
         db[:, 1:2] = np.array([1, 0, 0])
         db[:, self.height - 2:self.height - 1] = np.array([1, 0, 0])
         if self.include_background:
-            db += self.background
+            db += self.background*0.05
         return db
 
     def circle(self, center, rad, color):
@@ -133,34 +139,24 @@ class DrawingBoard:
 
         return action_colour
 
-    def apply_light(self, dark_col, dark_gain, light_gain, visualisation):
-        if dark_col < 0:
-            dark_col = 0
-        if visualisation:
-            if self.light_gradient > 0 and dark_col > 0:
-                gradient = self.chosen_math_library.linspace(dark_gain, light_gain, self.light_gradient)
-                gradient = self.chosen_math_library.expand_dims(gradient, 0)
-                gradient = self.chosen_math_library.repeat(gradient, self.height, 0)
-                gradient = self.chosen_math_library.expand_dims(gradient, 2)
-                self.db_visualisation[:, int(dark_col-(self.light_gradient/2)):int(dark_col+(self.light_gradient/2))] *= gradient
-                self.db_visualisation[:, :int(dark_col-(self.light_gradient/2))] *= dark_gain
-                self.db_visualisation[:, int(dark_col+(self.light_gradient/2)):] *= light_gain
-            else:
-                self.db_visualisation[:, :dark_col] *= dark_gain
-                self.db_visualisation[:, dark_col:] *= light_gain
+    def apply_light(self):
+        dark_field_length = int(self.height * self.dark_light_ratio)
+        if self.light_gradient > 0 and dark_field_length > 0:
+            self.db[:int(dark_field_length - (self.light_gradient / 2)), :] *= np.sqrt(self.dark_gain)
+
+            gradient = np.linspace(np.sqrt(self.dark_gain), 1, self.light_gradient)
+            gradient = np.expand_dims(gradient, 1)
+            gradient = np.repeat(gradient, self.height, 1)
+            #gradient = self.chosen_math_library.expand_dims(gradient, 2)
+            self.db[int(dark_field_length - (self.light_gradient / 2)):int(dark_field_length + (self.light_gradient / 2)), :, 0] *= gradient
+            self.db[int(dark_field_length - (self.light_gradient / 2)):int(dark_field_length + (self.light_gradient / 2)), :, 1] *= gradient
+            self.db[int(dark_field_length - (self.light_gradient / 2)):int(dark_field_length + (self.light_gradient / 2)), :, 2] *= gradient
 
         else:
-            if self.light_gradient > 0 and dark_col > 0:
-                gradient = self.chosen_math_library.linspace(dark_gain, light_gain, self.light_gradient)
-                gradient = self.chosen_math_library.expand_dims(gradient, 0)
-                gradient = self.chosen_math_library.repeat(gradient, self.height, 0)
-                gradient = self.chosen_math_library.expand_dims(gradient, 2)
-                self.db[:, int(dark_col-(self.light_gradient/2)):int(dark_col+(self.light_gradient/2))] *= gradient
-                self.db[:, :int(dark_col-(self.light_gradient/2))] *= dark_gain
-                self.db[:, int(dark_col+(self.light_gradient/2)):] *= light_gain
-            else:
-                self.db[:, :dark_col] *= dark_gain
-                self.db[:, dark_col:] *= light_gain
+            self.db[:dark_field_length, :] *= np.sqrt(self.dark_gain)
+            
+
+
 
 
 def draw_previous_actions(board, past_actions, past_positions, fish_angles, adjusted_colour_index,
@@ -271,35 +267,34 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
         data = {}
         for key in datfl.keys():
             data[key] = np.array(datfl[key])
-    fig = plt.figure(facecolor='0.9', figsize=(16, 12), dpi=10)
+    fig = plt.figure(facecolor='0.9', figsize=(14, 14), dpi=100)
     gs = fig.add_gridspec(nrows=9, ncols=9, left=0.05, right=0.85,
-                      hspace=0.1, wspace=0.05)
-    ax0 = fig.add_subplot(gs[:-1, 0:6])
+                      hspace=0.1, wspace=0.1)
+    ax0 = fig.add_subplot(gs[:-1, 0:8])
     
     ax1 = fig.add_subplot(gs[-1, 0:4])
     ax2 = fig.add_subplot(gs[-1, 4:8])
-    ax3 = fig.add_subplot(gs[0, 6:])
-    ax4 = fig.add_subplot(gs[1, 6:])
-    ax5 = fig.add_subplot(gs[2, 6:])
-    ax6 = fig.add_subplot(gs[3, 6:])
-    ax7 = fig.add_subplot(gs[4, 6:])
+    # ax3 = fig.add_subplot(gs[0, 6:])
+    # ax4 = fig.add_subplot(gs[1, 6:])
+    # ax5 = fig.add_subplot(gs[2, 6:])
+    # ax6 = fig.add_subplot(gs[3, 6:])
+    # ax7 = fig.add_subplot(gs[4, 6:])
     #annotate_axes(ax1, 'ax1')
 
-    board = DrawingBoard(env_variables["arena_width"], env_variables["arena_height"], data, include_background)
+    board = DrawingBoard(env_variables, data, include_background)
     if show_energy_state:
         energy_levels = data["energy_state"]
     fish_positions = np.array([data['fish_x'], data['fish_y']]).T
     num_steps = fish_positions.shape[0]
     metadata = dict(title='Movie Test', artist='Matplotlib',
                 comment='Movie support!')
-    writer = FFMpegWriter(fps=15, metadata=metadata)
-
+    writer = FFMpegWriter(fps=15)#, metadata=metadata)
+    print(writer.supported_formats)
     frames = []
     action_buffer = []
     position_buffer = []
     orientation_buffer = []
     consumption_buffer = []
-    num_steps = 500
     if trim_to_fish:
         frames = np.zeros((num_steps, int(scale * showed_region_quad*2), int(scale * showed_region_quad*2), 3))
     else:
@@ -309,7 +304,7 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
             addon = 0
                 
         #frames = np.zeros((num_steps, int(env_variables["arena_height"]*scale), int((env_variables["arena_width"]+addon)*scale), 3))
-    with writer.saving(fig, "writer_test.mp4", num_steps):
+    with writer.saving(fig, "writer_test.mp4", 100):
         for step in range(num_steps):
             print(f"{step}/{num_steps}")
             if continuous_actions:
@@ -370,8 +365,9 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
 
                 board.db_visualisation[rrs, ccs] = (0, 0, 1)
 
-            # if data["predator_presence"][step]:
-            #     board.circle(data["predator_positions"][step], env_variables['predator_size'], (0, 1, 0))
+            if data["predator_x"][step]!=0 and data["predator_y"][step]!=0:
+                predator_position = (data["predator_x"][step], data["predator_y"][step])
+                board.circle(predator_position, env_variables['predator_radius'], (0, 1, 0))
 
             if draw_action_space_usage:
                 if continuous_actions:
@@ -411,17 +407,17 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
             ax0.tick_params(left = False, right = False , labelleft = False ,
                     labelbottom = False, bottom = False)
 
-            # left_obs = data['observation'][step, :, :, 0].T
+            left_obs = data['observation'][step, :, :, 0].T
 
-            # right_obs = data['observation'][step, :, :, 1].T
-            # ax1.clear()
-            # ax2.clear()
-            # ax1.imshow(left_obs, interpolation='nearest', aspect='auto')
-            # ax1.tick_params(left = False, right = False , labelleft = False ,
-            #         labelbottom = False, bottom = False)
-            # ax2.imshow(right_obs, interpolation='nearest', aspect='auto')
-            # ax2.tick_params(left = False, right = False , labelleft = False ,
-            #         labelbottom = False, bottom = False)
+            right_obs = data['observation'][step, :, :, 1].T
+            ax1.clear()
+            ax2.clear()
+            ax1.imshow(left_obs, interpolation='nearest', aspect='auto', vmin=0, vmax=64)
+            ax1.tick_params(left = False, right = False , labelleft = False ,
+                    labelbottom = False, bottom = False)
+            ax2.imshow(right_obs, interpolation='nearest', aspect='auto', vmin=0, vmax=64)
+            ax2.tick_params(left = False, right = False , labelleft = False ,
+                    labelbottom = False, bottom = False)
 
             # plot_start = max(0, step - 100)
             # ax3.clear()
@@ -444,8 +440,9 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
             # ax7.plot(data['rnn_state_actor'][plot_start:step, 0, 30:40])
             # ax7.tick_params(left=False, right=False , labelleft=False, labelbottom=False, bottom=False)
             board.db = board.get_base_arena(0.3)
+            board.apply_light()
             writer.grab_frame()
-      
+    writer.finish()
 
 
     #make_video(frames, 'try.mp4', duration=len(frames) * s_per_frame, true_image=True)
@@ -455,10 +452,10 @@ if __name__ == "__main__":
     model = "local_test_large"
 
     config_file = './Environment/1_env.json'
-    data_file = '/home/asaph/acme/20250205-160709/logs/evaluator/logs_283.hdf5'
+    data_file = 'prev_run_backup/20250611-123835/logs/evaluator/logs_203.hdf5'
 
     draw_episode(data_file, config_file, continuous_actions=False, show_energy_state=False,
-                 trim_to_fish=True, showed_region_quad=600, save_id="try", include_background=False, n_actions_to_show=10)
+                 trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=10)
 
 
 

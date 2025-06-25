@@ -23,31 +23,31 @@ class BaseEnvironment(dm_env.Environment):
 
         self.env_variables = env_variables
         self.num_actions = self.env_variables['num_actions']
-        max_photoreceptor_rf_size = max([self.env_variables['uv_photoreceptor_rf_size'],
-                                         self.env_variables['red_photoreceptor_rf_size']])
-        light_gradient = self.env_variables['light_gradient']
 
-        # Set max visual distance to the point at which 99.9% of photons have been lost to absorption mask.
-        max_visual_distance = np.absolute(np.log(0.001) / self.env_variables["light_decay_rate"])
         
         print("defining drawing board")
-        self.board = DrawingBoard(arena_width=self.env_variables['arena_width'],
-                                  arena_height=self.env_variables['arena_height'],
-                                  uv_light_decay_rate=self.env_variables['light_decay_rate'],
-                                  red_light_decay_rate=self.env_variables['light_decay_rate'],
-                                  photoreceptor_rf_size=max_photoreceptor_rf_size,
-                                  prey_radius=self.env_variables['prey_radius'],
-                                  predator_radius=self.env_variables['predator_radius'],
-                                  visible_scatter=self.env_variables['background_brightness'],
-                                  dark_light_ratio=self.env_variables['dark_light_ratio'],
-                                  dark_gain=self.env_variables['dark_gain'],
-                                  light_gain=self.env_variables['light_gain'],
-                                  light_gradient=light_gradient,
-                                  max_visual_distance=max_visual_distance,
-                                  red_object_intensity=self.env_variables["red_object_intensity"],
-                                  red2_object_intensity=self.env_variables["background_point_intensity"],
-                                  )
+        self.max_uv_range = np.absolute(np.log(0.001) / self.env_variables["light_decay_rate"])
 
+        # self.board = DrawingBoard(arena_width=self.env_variables['arena_width'],
+        #                           arena_height=self.env_variables['arena_height'],
+        #                           uv_light_decay_rate=self.env_variables['light_decay_rate'],
+        #                           red_light_decay_rate=self.env_variables['light_decay_rate'],
+        #                           photoreceptor_rf_size=max_photoreceptor_rf_size,
+        #                           prey_radius=self.env_variables['prey_radius'],
+        #                           predator_radius=self.env_variables['predator_radius'],
+        #                           visible_scatter=self.env_variables['background_brightness'],
+        #                           dark_light_ratio=self.env_variables['dark_light_ratio'],
+        #                           dark_gain=self.env_variables['dark_gain'],
+        #                           light_gain=self.env_variables['light_gain'],
+        #                           light_gradient=light_gradient,
+        #                           max_red_range=max_red_range,
+        #                           max_uv_range=self.max_uv_range,
+        #                           red_object_intensity=self.env_variables["background_point_intensity"],
+        #                           sediment_sigma=self.env_variables["sediment_sigma"],
+        #                           #red2_object_intensity=self.env_variables["background_point_intensity"],
+        #                           )
+
+        self.board = DrawingBoard(self.env_variables)
         print('defining physics')
         self.dark_col = int(self.env_variables['arena_width'] * self.env_variables['dark_light_ratio'])
         if self.dark_col == 0:  # Fixes bug with left wall always being invisible.
@@ -56,9 +56,10 @@ class BaseEnvironment(dm_env.Environment):
         self.space = pymunk.Space()
         self.space.gravity = pymunk.Vec2d(0.0, 0.0)
         self.space.damping = self.env_variables['drag']
+
         self.fish = Fish(board=self.board,
                          env_variables=env_variables,
-                         dark_col=self.dark_col,
+                         max_uv_range=self.max_uv_range,
                          )        
 
 
@@ -109,6 +110,7 @@ class BaseEnvironment(dm_env.Environment):
 
     def reset(self) -> dm_env.TimeStep:
         self._reset_next_step = False
+        self.tested_predator = False
         self.num_steps = 0
         self.fish.stress = 1
         self.fish.touched_edge_this_step = False
@@ -117,7 +119,6 @@ class BaseEnvironment(dm_env.Environment):
         self.sand_grains_bumped = 0
         self.energy_level_log = []
         self.salt_damage = 0
-        self.board.light_gain = self.env_variables["light_gain"]
         self.switch_step = None
         # New energy system:
         self.fish.energy_level = 1
@@ -138,13 +139,17 @@ class BaseEnvironment(dm_env.Environment):
 
         self.failed_capture_attempts = 0
         self.in_light_history = []
-        self.fish.body.position = (np.random.randint(self.env_variables['fish_mouth_radius'] + 40,
-                                                     self.env_variables['arena_width'] - (self.env_variables[
-                                                                                              'fish_mouth_radius'] + 40)),
-                                   np.random.randint(self.env_variables['fish_mouth_radius'] + 40,
-                                                     self.env_variables['arena_height'] - (self.env_variables[
-                                                                                               'fish_mouth_radius'] + 40)))
-        self.fish.body.angle = np.random.random() * 2 * np.pi
+        if self.env_variables['test_sensory_system']:
+            self.fish.body.position = (self.env_variables['arena_width'] / 2, self.env_variables['arena_height'] / 2)
+            self.fish.body.angle = 0
+        else:
+            self.fish.body.position = (np.random.randint(self.env_variables['fish_mouth_radius'] + 40,
+                                                        self.env_variables['arena_width'] - (self.env_variables[
+                                                                                                'fish_mouth_radius'] + 40)),
+                                    np.random.randint(self.env_variables['fish_mouth_radius'] + 40,
+                                                        self.env_variables['arena_height'] - (self.env_variables[
+                                                                                                'fish_mouth_radius'] + 40)))
+            self.fish.body.angle = np.random.random() * 2 * np.pi
 
         self.fish.body.velocity = (0, 0)
         if self.env_variables["current_setting"]:
@@ -197,9 +202,21 @@ class BaseEnvironment(dm_env.Environment):
 
             if not self.env_variables["prey_reproduction_mode"]:
                 self.build_prey_cloud_walls()
-
-        for i in range(int(self.env_variables['prey_num'])):
-            self.create_prey()
+        if self.env_variables["test_sensory_system"]:
+            self.create_prey(prey_position=(self.env_variables['arena_width'] / 2 + 30,
+                                            self.env_variables['arena_height'] / 2 + 30))
+            self.create_prey(prey_position=(self.env_variables['arena_width'] / 2,
+                                            self.env_variables['arena_height'] / 2 - 40))
+            self.create_prey(prey_position=(self.env_variables['arena_width'] / 2,
+                                            self.env_variables['arena_height'] / 2 + 40))
+            self.create_prey(prey_position=(self.env_variables['arena_width'] / 2 + 30,
+                                            self.env_variables['arena_height'] / 2 - 30))
+            self.create_prey(prey_position=(self.env_variables['arena_width'] / 2 + 5,
+                                            self.env_variables['arena_height'] / 2 + 50))
+            
+        else:
+            for i in range(int(self.env_variables['prey_num'])):
+                self.create_prey()
 
         for i in range(self.env_variables['sand_grain_num']):
             self.create_sand_grain()
@@ -288,8 +305,8 @@ class BaseEnvironment(dm_env.Environment):
 
     def draw_walls_and_sediment(self):
         """Draws the walls and background sediment on the drawing board, which is used for computing visual inputs."""
-        self.board.erase(bkg=self.env_variables['background_brightness'])
-        self.board.draw_walls()
+        self.board.erase()
+        #self.board.draw_walls()
         self.board.draw_sediment()
 
     def clear_environmental_features(self):
@@ -726,11 +743,33 @@ class BaseEnvironment(dm_env.Environment):
             self.predator_body.apply_impulse_at_local_point((self.env_variables['predator_impulse'], 0))
 
     def touch_predator(self, arbiter, space, data):
+        if self.env_variables["test_sensory_system"]:
+            self.remove_predator()
         if self.num_steps > self.env_variables['immunity_steps']:
             self.fish.touched_predator = True
             return False
         else:
             return True
+        
+    def get_predator_angles_distance(self):
+        if self.predator_body is None:
+            return None, None, None
+        predator_position = self.predator_body.position
+        fish_position = self.fish.body.position
+        distance = np.sqrt(
+            (predator_position[0] - fish_position[0]) ** 2 +
+            (predator_position[1] - fish_position[1]) ** 2)
+        predator_half_angular_size = np.arctan2(self.env_variables['predator_radius'], distance)
+        distance -= self.env_variables['predator_radius']
+        predator_vector = predator_position - fish_position  # Taking fish as origin
+        # Will generate values between -pi/2 and pi/2 which require adjustment depending on quadrant.
+        angle = np.arctan2(predator_vector[1], predator_vector[0])
+        left_edge = angle + predator_half_angular_size
+        right_edge = angle - predator_half_angular_size
+        left_edge = np.arctan2(np.sin(left_edge), np.cos(left_edge))  # Normalise to -pi to pi
+        right_edge = np.arctan2(np.sin(right_edge), np.cos(right_edge))  # Normalise to -pi to pi
+
+        return left_edge, right_edge, distance        
 
     def check_fish_proximity_to_walls(self):
         fish_position = self.fish.body.position
@@ -785,7 +824,7 @@ class BaseEnvironment(dm_env.Environment):
         else:
             angle_from_fish = random.randint(0, 360)
 
-        angle_from_fish = np.radians(angle_from_fish / np.pi)
+        angle_from_fish = np.radians(angle_from_fish)
         return angle_from_fish
 
     def check_fish_not_near_wall(self):
@@ -827,7 +866,12 @@ class BaseEnvironment(dm_env.Environment):
 
         fish_position = self.fish.body.position
 
-        angle_from_fish = self.select_predator_angle_of_attack()
+        if self.env_variables["test_sensory_system"]:
+            # choose from 0, 90, 180, 270 degrees
+            angle_from_fish = np.radians(300)#np.radians(np.random.choice([90, 180, 270]))
+            print("Predator angle from fish: ", np.degrees(angle_from_fish))
+        else:
+            angle_from_fish = self.select_predator_angle_of_attack()
         dy = self.env_variables["distance_from_fish"] * np.cos(angle_from_fish)
         dx = self.env_variables["distance_from_fish"] * np.sin(angle_from_fish)
 
@@ -842,7 +886,7 @@ class BaseEnvironment(dm_env.Environment):
 
         self.predator_shape.collision_type = 5
         self.predator_shape.filter = pymunk.ShapeFilter(
-            mask=pymunk.ShapeFilter.ALL_MASKS ^ 2)  # Category 2 objects cant collide with predator
+            mask=pymunk.ShapeFilter.ALL_MASKS() ^ 2)  # Category 2 objects cant collide with predator
 
         self.space.add(self.predator_body, self.predator_shape)
 
@@ -944,6 +988,8 @@ class BaseEnvironment(dm_env.Environment):
             'fish_angle': [self.fish.body.angle],
             'prey_x': [[pr.position[0] for pr in self.prey_bodies]],
             'prey_y': [[pr.position[1] for pr in self.prey_bodies]],
+            'predator_x': [self.predator_body.position[0]] if self.predator_body else [0],
+            'predator_y': [self.predator_body.position[1]] if self.predator_body else [0],
         }
         return info_dict
     def step(self, action: int) -> dm_env.TimeStep:
@@ -1071,7 +1117,7 @@ class BaseEnvironment(dm_env.Environment):
 
             self.fish.touched_edge_this_step = False
 
-        if self.env_variables["prey_reproduction_mode"] and self.env_variables["differential_prey"]:
+        if self.env_variables["prey_reproduction_mode"] and self.env_variables["differential_prey"] and not self.env_variables["test_sensory_system"]:
             self.reproduce_prey()
             self.prey_ages = [age + 1 for age in self.prey_ages]
             for i, age in enumerate(self.prey_ages):
@@ -1098,7 +1144,7 @@ class BaseEnvironment(dm_env.Environment):
             self.recent_cause_of_death = "Time"
 
         # Drawing the features visible at this step:
-        # self.draw_walls_and_sediment()
+        self.draw_walls_and_sediment()
 
 
         # if self.assay_run_version == "Original" and self.num_steps > 2:  # Temporal conditional stops assay buffer size errors.
@@ -1146,10 +1192,9 @@ class BaseEnvironment(dm_env.Environment):
     def get_observation(self, action, reward):
 
         self.board.FOV.update_field_of_view(self.fish.body.position)
-        visual_input, _ = self.resolve_visual_input()
+        visual_input = self.resolve_visual_input()
         # print minimal and maximal values of visual input:
         visual_input = visual_input.astype(np.float32)
-
         # replace the visual input with a random image of the same size:
         # visual_input = (np.random.rand(139, 3, 2)-0.5)*2
         # Calculate internal state
@@ -1181,25 +1226,72 @@ class BaseEnvironment(dm_env.Environment):
         #return visual_input#[visual_input, internal_state]
     
     def init_predator(self):
-        if self.predator_location is None and \
-                np.random.rand(1) < self.env_variables["probability_of_predator"] and \
-                self.num_steps > self.env_variables['immunity_steps'] and \
-                not self.check_fish_not_near_wall():
+        if self.env_variables["test_sensory_system"]:
+            if self.num_steps > 10 and not self.tested_predator:
+                self.create_predator()
+                self.tested_predator = True
+        else:
 
-            self.create_predator()
+            if self.predator_location is None and \
+                    np.random.rand(1) < self.env_variables["probability_of_predator"] and \
+                    self.num_steps > self.env_variables['immunity_steps'] and \
+                    not self.check_fish_not_near_wall():
+
+                self.create_predator()
+
+    def get_FOV(self, fish_position, max_range, env_width, env_height):
+        round_max_range = int(np.round(max_range))
+        fish_position = np.round(fish_position).astype(int)
+
+        full_fov_top = fish_position[1] - round_max_range
+        full_fov_bottom = fish_position[1] + round_max_range + 1
+        full_fov_left = fish_position[0] - round_max_range
+        full_fov_right = fish_position[0] + round_max_range + 1
+
+        dim = round_max_range * 2 + 1
+        local_fov_top = 0
+        local_fov_bottom = dim
+        local_fov_left = 0
+        local_fov_right = dim
+
+        enclosed_fov_top = full_fov_top
+        enclosed_fov_bottom = full_fov_bottom
+        enclosed_fov_left = full_fov_left
+        enclosed_fov_right = full_fov_right
+
+        if full_fov_top < 0:
+            enclosed_fov_top = 0
+            local_fov_top = -full_fov_top
+
+        if full_fov_bottom > env_width:
+            enclosed_fov_bottom = env_width
+            local_fov_bottom = dim - (full_fov_bottom - env_width)
+
+        if full_fov_left < 0:
+            enclosed_fov_left = 0
+            local_fov_left = -full_fov_left
+
+        if full_fov_right > env_height:
+            enclosed_fov_right = env_height
+            local_fov_right = dim - (full_fov_right - env_height)
+
+        enclosed_FOV = [enclosed_fov_top, enclosed_fov_bottom, enclosed_fov_left, enclosed_fov_right]
+        local_FOV = [local_fov_top, local_fov_bottom, local_fov_left, local_fov_right]
+
+        return enclosed_FOV, local_FOV
 
     def resolve_visual_input(self):
-        # eye positions within FOV - Relative eye positions to FOV
+        # Relative eye positions to center of FOV
         right_eye_pos = (
             -np.cos(np.pi / 2 - self.fish.body.angle) * self.env_variables[
-                'eyes_biasx'] + self.board.max_visual_distance,
+                'eyes_biasx'],# + self.board.max_red_range,
             +np.sin(np.pi / 2 - self.fish.body.angle) * self.env_variables[
-                'eyes_biasx'] + self.board.max_visual_distance)
+                'eyes_biasx'])# + self.board.max_red_range)
         left_eye_pos = (
             +np.cos(np.pi / 2 - self.fish.body.angle) * self.env_variables[
-                'eyes_biasx'] + self.board.max_visual_distance,
+                'eyes_biasx'],# + self.board.max_red_range,
             -np.sin(np.pi / 2 - self.fish.body.angle) * self.env_variables[
-                'eyes_biasx'] + self.board.max_visual_distance)
+                'eyes_biasx'])# + self.board.max_red_range)
 
         if self.predator_body is not None:
             predator_bodies = np.array([self.predator_body.position])
@@ -1211,11 +1303,20 @@ class BaseEnvironment(dm_env.Environment):
         # full_masked_image, lum_mask = self.board.get_masked_pixels(np.array(self.fish.body.position),
         #                                                            np.array(prey_locations + sand_grain_locations),
         #                                                            predator_bodies)
-        lum_mask = self.board.get_masked_pixels(None,None,None, return_only_luminance=True)
+        bottom_masked_image = self.board.get_masked_bottom()
+        dim = int(np.round(self.max_uv_range * 2 + 1))
+        uv_luminance_mask = np.zeros((dim, dim))
+        enclosed_FOV, local_FOV = self.get_FOV(self.fish.body.position, self.max_uv_range, self.env_variables["arena_width"],
+                                               self.env_variables["arena_height"])
+        lum_slice = self.board.global_luminance_mask[enclosed_FOV[0]:enclosed_FOV[1],
+                                               enclosed_FOV[2]:enclosed_FOV[3]]
+        uv_luminance_mask[local_FOV[0]:local_FOV[1],
+                             local_FOV[2]:local_FOV[3]] = lum_slice
+        uv_luminance_mask *= self.board.uv_scatter
         # Convert to FOV coordinates (to match eye coordinates)
-        full_masked_image=None
+        #full_masked_image=None
         if len(prey_locations) > 0:
-            prey_locations_array = np.array(prey_locations) - np.array(self.fish.body.position) + self.board.max_visual_distance
+            prey_locations_array = np.array(prey_locations) - np.array(self.fish.body.position) + self.max_uv_range
         else:
             prey_locations_array = np.array([])
         if len(sand_grain_locations) > 0:
@@ -1224,10 +1325,16 @@ class BaseEnvironment(dm_env.Environment):
         else:
             sand_grain_locations_array = np.empty((0, 2))
 
-        self.fish.left_eye.read(full_masked_image, left_eye_pos[0], left_eye_pos[1], self.fish.body.angle, lum_mask,
-                                prey_locations_array, sand_grain_locations_array)
-        self.fish.right_eye.read(full_masked_image, right_eye_pos[0], right_eye_pos[1], self.fish.body.angle, lum_mask,
-                                 prey_locations_array, sand_grain_locations_array)
+        # check if preditor exists
+        if predator_bodies.size > 0:
+            predator_left, predator_right, predator_distance = self.get_predator_angles_distance()
+        else:
+            predator_left, predator_right, predator_distance = np.nan, np.nan, np.nan
+
+        self.fish.left_eye.read(bottom_masked_image, left_eye_pos[0], left_eye_pos[1], self.fish.body.angle, uv_luminance_mask,
+                                prey_locations_array, sand_grain_locations_array, predator_left, predator_right, predator_distance)
+        self.fish.right_eye.read(bottom_masked_image, right_eye_pos[0], right_eye_pos[1], self.fish.body.angle, uv_luminance_mask,
+                                 prey_locations_array, sand_grain_locations_array, predator_left, predator_right, predator_distance)
         observation = np.dstack((self.fish.readings_to_photons(self.fish.left_eye.readings),
                                  self.fish.readings_to_photons(self.fish.right_eye.readings)))
-        return observation, full_masked_image
+        return observation

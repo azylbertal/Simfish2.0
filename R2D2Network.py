@@ -14,11 +14,15 @@ Glossary of shapes:
 from acme.jax.networks import R2D2AtariNetwork
 from acme import specs
 from acme.jax import networks as networks_lib
+from acme.jax.networks import duelling
+
 from acme.jax.networks.embedding import OAREmbedding
 import haiku as hk
 import jax.numpy as jnp
 import jax
 from typing import Optional, Tuple, Sequence, Type
+from acme.wrappers import observation_action_reward
+from acme.jax.networks import base
 
 class Flatten(hk.Module):
     def __init__(self, name="Flatten"):
@@ -58,11 +62,9 @@ class DeepSimfishTorso(hk.Module):
   def __init__(
       self,
       hidden_sizes: Sequence[int] = (256,),
-      use_layer_norm: bool = False,
       name: str = 'deep_simfish_torso'):
     super().__init__(name=name)
     self.retina = retina()
-    self._use_layer_norm = use_layer_norm
     # Make sure to activate the last layer as this torso is expected to feed
     # into the rest of a bigger network.
     self.mlp_head = hk.nets.MLP(output_sizes=hidden_sizes, activate_final=True)
@@ -79,19 +81,64 @@ class DeepSimfishTorso(hk.Module):
     output = self.mlp_head(output)
     return output
 
-class R2D2Network(R2D2AtariNetwork):
-    """A duelling recurrent network for use with vector observations compatible with R2D2."""
+# class R2D2Network(R2D2AtariNetwork):
+#     """A duelling recurrent network for use with vector observations compatible with R2D2."""
 
-    def __init__(self, num_actions: int):
-        super().__init__(num_actions)
-        #self._embed = OAREmbedding(Flatten(), num_actions)
-        self._embed = OAREmbedding(DeepSimfishTorso(hidden_sizes=[128], use_layer_norm=True), num_actions)
+#     def __init__(self, num_actions: int):
+#         super().__init__(num_actions)
+#         #self._embed = OAREmbedding(Flatten(), num_actions)
+#         self._embed = OAREmbedding(DeepSimfishTorso(hidden_sizes=[128], use_layer_norm=True), num_actions)
 
 
-def make_r2d2_networks(env_spec: specs.EnvironmentSpec) -> R2D2Network:
+
+class R2D2SimfishNetwork(hk.RNNCore):
+  """Based on aa duelling recurrent network for use with Atari observations as seen in R2D2.
+
+  See https://openreview.net/forum?id=r1lyTjAqYX for more information.
+  """
+
+  def __init__(self, num_actions: int):
+    super().__init__(name='r2d2_simfish_network')
+    self._embed = OAREmbedding(
+        DeepSimfishTorso(hidden_sizes=[128]), num_actions)
+    self._core = hk.LSTM(512)
+    self._duelling_head = duelling.DuellingMLP(num_actions, hidden_sizes=[512])
+    self._num_actions = num_actions
+
+  def __call__(
+      self,
+      inputs: observation_action_reward.OAR,  # [B, ...]
+      state: hk.LSTMState  # [B, ...]
+  ) -> Tuple[base.QValues, hk.LSTMState]:
+    embeddings = self._embed(inputs)  # [B, D+A+1]
+    core_outputs, new_state = self._core(embeddings, state)
+    q_values = self._duelling_head(core_outputs)
+    return q_values, new_state
+
+  def initial_state(self, batch_size: Optional[int],
+                    **unused_kwargs) -> hk.LSTMState:
+    return self._core.initial_state(batch_size)
+
+  def unroll(
+      self,
+      inputs: observation_action_reward.OAR,  # [T, B, ...]
+      state: hk.LSTMState  # [T, ...]
+  ) -> Tuple[base.QValues, hk.LSTMState]:
+    """Efficient unroll that applies torso, core, and duelling mlp in one pass."""
+    embeddings = hk.BatchApply(self._embed)(inputs)  # [T, B, D+A+1]
+    core_outputs, new_states = hk.static_unroll(self._core, embeddings, state)
+    q_values = hk.BatchApply(self._duelling_head)(core_outputs)  # [T, B, A]
+    return q_values, new_states
+
+
+
+
+
+
+def make_r2d2_networks(env_spec: specs.EnvironmentSpec) -> R2D2SimfishNetwork:
     """Builds default R2D2 networks for simple networks."""
 
-    def make_core_module() -> R2D2Network:
-        return R2D2Network(env_spec.actions.num_values)
+    def make_core_module() -> R2D2SimfishNetwork:
+        return R2D2SimfishNetwork(env_spec.actions.num_values)
 
     return networks_lib.make_unrollable_network(env_spec, make_core_module)
