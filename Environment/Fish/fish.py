@@ -193,6 +193,7 @@ class Fish:
         else:
             self.prev_action_impulse = 0
             self.prev_action_angle = 0
+            self.prev_action = action
             reward = 0
 
 
@@ -203,49 +204,6 @@ class Fish:
 
         return reward
 
-    def get_action_colour(self, action, magnitude, base_light):
-        """Returns the (R, G, B) for associated actions"""
-        if action == 0:  # Slow2
-            action_colour = (base_light, magnitude, base_light)
-
-        elif action == 1:  # RT right
-            action_colour = (base_light, magnitude, base_light)
-
-        elif action == 2:  # RT left
-            action_colour = (base_light, magnitude, base_light)
-
-        elif action == 3:  # Short capture swim
-            action_colour = (magnitude, base_light, magnitude)
-
-        elif action == 4:  # j turn right
-            action_colour = (magnitude, magnitude, magnitude)
-
-        elif action == 5:  # j turn left
-            action_colour = (magnitude, magnitude, magnitude)
-
-        elif action == 6:  # Do nothing
-            action_colour = (0, 0, 0)
-
-        elif action == 7:  # c start right
-            action_colour = (magnitude, base_light, base_light)
-
-        elif action == 8:  # c start left
-            action_colour = (magnitude, base_light, base_light)
-
-        elif action == 9:  # Approach swim.
-            action_colour = (base_light, magnitude, base_light)
-
-        elif action == 10:
-            action_colour = (magnitude, magnitude, magnitude)
-
-        elif action == 11:
-            action_colour = (magnitude, magnitude, magnitude)
-
-        else:
-            action_colour = (0, 0, 0)
-            print("Invalid action given")
-
-        return action_colour
 
     def calculate_impulse(self, distance):
         """
@@ -289,7 +247,8 @@ class Fish:
         # print()
         # print(self.prev_action_impulse)
         # print()
-
+        if prev_action == 3:
+            energy_use *= self.env_variables['capture_swim_energy_cost_scaling']
         reward += (energy_intake * self.consumption_reward_scaling) - (energy_use * self.action_reward_scaling)
 
         self.energy_level += energy_intake - energy_use

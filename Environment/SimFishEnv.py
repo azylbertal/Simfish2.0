@@ -70,7 +70,7 @@ class BaseEnvironment(dm_env.Environment):
             self.salt_gradient = None
             self.xp, self.yp = np.arange(self.env_variables['arena_width']), np.arange(
                 self.env_variables['arena_height'])
-            self.salt_location = None
+        self.salt_location = None
 
 
         # For currents (new simulation):
@@ -128,6 +128,8 @@ class BaseEnvironment(dm_env.Environment):
             self.reset_salt_gradient()
             self.fish.salt_health = 1.0
             self.salt_damage_history = []
+        else:
+            self.salt_location = [np.nan, np.nan]
 
         self.clear_environmental_features()
         self.board.reset()
@@ -374,8 +376,7 @@ class BaseEnvironment(dm_env.Environment):
         self.salt_location = [salt_source_x, salt_source_y]
         salt_distance = (((salt_source_x - self.xp[:, None]) ** 2 + (
                 salt_source_y - self.yp[None, :]) ** 2) ** 0.5)  # Measure of distance from source at every point.
-        self.salt_gradient = np.exp(-self.env_variables["salt_concentration_decay"] * salt_distance) * \
-                             self.env_variables["max_salt_damage"]
+        self.salt_gradient = np.exp(-self.env_variables["salt_concentration_decay"] * salt_distance) 
 
     def build_prey_cloud_walls(self):
         for i in self.prey_cloud_locations:
@@ -1095,21 +1096,20 @@ class BaseEnvironment(dm_env.Environment):
 
         # Salt health
         if self.env_variables["salt"]:
-            self.salt_damage = self.salt_gradient[int(self.fish.body.position[0]), int(self.fish.body.position[1])]
-            self.salt_damage_history.append(self.salt_damage)
-            self.fish.salt_health = self.fish.salt_health + self.env_variables["salt_recovery"] - self.salt_damage
-            if self.fish.salt_health > 1.0:
-                self.fish.salt_health = 1.0
-            if self.fish.salt_health < 0:
-                pass
+            self.salt_concentration = self.salt_gradient[int(self.fish.body.position[0]), int(self.fish.body.position[1])]
+            # self.fish.salt_health = self.fish.salt_health + self.env_variables["salt_recovery"] - self.salt_damage
+            # if self.fish.salt_health > 1.0:
+            #     self.fish.salt_health = 1.0
+            # if self.fish.salt_health < 0:
+            #     pass
                 # done = True
                 # self.recent_cause_of_death = "Salt"
 
-            if self.env_variables["salt_reward_penalty"] > 0 and self.salt_damage > self.env_variables["salt_recovery"]:
-                reward -= self.env_variables["salt_reward_penalty"] * self.salt_damage
-                self.salt_associated_reward -= self.env_variables['salt_reward_penalty'] * self.salt_damage
+            
+            reward -= self.env_variables["salt_reward_penalty"] * self.salt_concentration
+            self.salt_associated_reward -= self.env_variables['salt_reward_penalty'] * self.salt_concentration
         else:
-            self.salt_damage = 0
+            self.salt_concentration = 0
 
         if self.fish.touched_edge_this_step:
             reward -= self.env_variables["wall_touch_penalty"]
@@ -1173,7 +1173,9 @@ class BaseEnvironment(dm_env.Environment):
         if len_internal_state == 0:
             len_internal_state = 1
         vis_shape = (len(self.fish.left_eye.interpolated_observation), 3, 2)
-        obs_spec = specs.Array(shape=vis_shape, dtype=np.float32, name="visual_input")
+        #obs_spec = specs.Array(shape=vis_shape, dtype=np.float32, name="visual_input")
+        obs_spec = [specs.Array(shape=vis_shape, dtype='float32', name="visual_input"),
+                    specs.Array(shape=(len_internal_state,), dtype='float32', name="internal_state")]
         return OAR(observation=obs_spec,
             action=specs.Array(shape=(), dtype=int),
             reward=specs.Array(shape=(), dtype=np.float64),
@@ -1195,8 +1197,6 @@ class BaseEnvironment(dm_env.Environment):
         visual_input = self.resolve_visual_input()
         # print minimal and maximal values of visual input:
         visual_input = visual_input.astype(np.float32)
-        # replace the visual input with a random image of the same size:
-        # visual_input = (np.random.rand(139, 3, 2)-0.5)*2
         # Calculate internal state
         internal_state = []
         internal_state_order = []
@@ -1211,19 +1211,14 @@ class BaseEnvironment(dm_env.Environment):
             # print(self.fish.energy_level)
             internal_state_order.append("energy_state")
         if self.env_variables['salt']:
-            # Scale salt damage so is within same range as pixel counts going in (learning using these also failed with
-            # lower scaling)
-            if self.env_variables["max_salt_damage"] > 0:
-                internal_state.append((255 * self.salt_damage)/self.env_variables["max_salt_damage"])
-            else:
-                internal_state.append(0.0)
+            
+            internal_state.append(self.salt_concentration)
 
             internal_state_order.append("salt")
         if len(internal_state) == 0:
             internal_state.append(0)
-        internal_state = np.array([internal_state])
-        return OAR(observation=visual_input,action=action, reward=reward)
-        #return visual_input#[visual_input, internal_state]
+        internal_state = np.array(internal_state, dtype=np.float32)
+        return OAR(observation=[visual_input, internal_state],action=action, reward=reward)
     
     def init_predator(self):
         if self.env_variables["test_sensory_system"]:

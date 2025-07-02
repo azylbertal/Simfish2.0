@@ -24,10 +24,47 @@ import time
 from typing import TextIO, Union
 
 from acme.utils import paths
-from acme.utils.loggers import base
+from acme.utils.loggers import base as base_loggers
+from acme.utils.observers import base as base_observers
+import dm_env
 
+from typing import Any, Callable, Dict, Generic, Iterator, Optional, Sequence
 
-class HDF5Logger(base.Logger):
+class EnvInfoKeep(base_observers.EnvLoopObserver):
+  """An observer that collects and accumulates scalars from env's info."""
+
+  def __init__(self):
+    self._metrics = None
+
+  def _accumulate_metrics(self, env: dm_env.Environment, obs) -> None:
+    if not hasattr(env, 'get_info'):
+      return
+    info = getattr(env, 'get_info')()
+    info['action'] = [int(obs.action)]
+    info['vis_observation'] = [obs.observation[0]]
+    info['internal_state'] = [obs.observation[1]]
+    if not info:
+      return
+    for k, v in info.items():
+      self._metrics[k] = self._metrics.get(k, []) + v
+
+  def observe_first(self, env: dm_env.Environment, timestep: dm_env.TimeStep
+                    ) -> None:
+    """Observes the initial state."""
+    sediment = env.board.global_sediment_grating
+    self._metrics = {'sediment': [sediment], 'salt_location': [env.salt_location]}
+    self._accumulate_metrics(env, timestep.observation)
+
+  def observe(self, env: dm_env.Environment, timestep: dm_env.TimeStep,
+              action: np.ndarray) -> None:
+    """Records one environment step."""
+    self._accumulate_metrics(env, timestep.observation)
+
+  def get_metrics(self) -> Dict[str, base_observers.Number]:
+    """Returns metrics collected for the current episode."""
+    return self._metrics
+
+class HDF5Logger(base_loggers.Logger):
   """Standard HDF5 logger.
 
 
@@ -40,6 +77,7 @@ class HDF5Logger(base.Logger):
       directory_or_file: Union[str, TextIO] = '~/acme',
       label: str = '',
       add_uid: bool = True,
+      wait_min: float = 10,
   ):
     """Instantiates the logger.
 
@@ -58,16 +96,16 @@ class HDF5Logger(base.Logger):
           directory_or_file, 'logs', label, add_uid=self._add_uid)
     self.base_path = os.path.join(directory, 'logs_')
     self.called = 0
+    self.wait_min = wait_min
 
-  def write(self, data: base.LoggingData):
+  def write(self, data: base_loggers.LoggingData):
   
-    data = base.to_numpy(data)
+    data = base_loggers.to_numpy(data)
     self.called += 1
 
     # write the fields of data into an hdf5 file
     with h5py.File(self.base_path + str(self.called) + '.hdf5', 'w') as f:
       for key, value in data.items():
-        print(key)
         # if key contains 'prey'...
         if 'prey' in key:
           # value is a list of lists with variable length. find the maximal length
@@ -84,7 +122,7 @@ class HDF5Logger(base.Logger):
         else:
             f.create_dataset(key, data=value)
     # wait to space out the writes
-    time.sleep(10 * 60)
+    time.sleep(self.wait_min * 60)
 
   def close(self):
     pass

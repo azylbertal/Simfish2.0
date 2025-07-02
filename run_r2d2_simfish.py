@@ -69,7 +69,7 @@ flags.DEFINE_string('env_name', 'Pong', 'What environment to run.')
 flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
 flags.DEFINE_integer('num_steps', 25_000_000,
                      'Number of environment steps to run for.')
-#flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
+flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
 
 FLAGS = flags.FLAGS
 class SimfishR2D2Builder(r2d2.R2D2Builder):
@@ -116,7 +116,8 @@ class EnvInfoKeep(base.EnvLoopObserver):
       return
     info = getattr(env, 'get_info')()
     info['action'] = [int(obs.action)]
-    info['observation'] = [obs.observation]
+    info['vis_observation'] = [obs.observation[0]]
+    info['internal_state'] = [obs.observation[1]]
     if not info:
       return
     for k, v in info.items():
@@ -292,7 +293,7 @@ def build_experiment_config():
       #logger_factory=logger_factory,
       evaluator_factories=eval_factories,
       seed=FLAGS.seed,
-      checkpointing=experiments.CheckpointingConfig(add_uid=False),
+      checkpointing=experiments.CheckpointingConfig(add_uid=True),
       max_num_actor_steps=FLAGS.num_steps)
   
 

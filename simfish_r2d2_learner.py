@@ -22,12 +22,13 @@ def reflect_actions(values: types.Nest) -> types.NestedArray:
 
 def reflect_samples(samples: reverb.ReplaySample) -> reverb.ReplaySample:
   """Reflects the observations in the samples."""
-  reflected_observation = reflect_observations(samples.data.observation.observation)
+  reflected_vis_observation = reflect_observations(samples.data.observation.observation[0])
+  internal_states = samples.data.observation.observation[1]
   reflected_action = reflect_actions(samples.data.observation.action)
   reward = samples.data.observation.reward
 
   reflected_OAR = OAR(
-      observation=reflected_observation,
+      observation=[reflected_vis_observation, internal_states],
       action=reflected_action,
       reward=reward)
   

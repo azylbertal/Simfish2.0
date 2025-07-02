@@ -16,13 +16,53 @@ from acme import specs
 from acme.jax import networks as networks_lib
 from acme.jax.networks import duelling
 
-from acme.jax.networks.embedding import OAREmbedding
+#from acme.jax.networks.embedding import OAREmbedding
 import haiku as hk
 import jax.numpy as jnp
 import jax
 from typing import Optional, Tuple, Sequence, Type
 from acme.wrappers import observation_action_reward
 from acme.jax.networks import base
+import dataclasses
+
+@dataclasses.dataclass
+class OAREmbedding(hk.Module):
+  """Module for embedding (observation, action, reward) inputs together."""
+
+  torso: hk.SupportsCall
+  num_actions: int
+
+  def __call__(self, inputs: observation_action_reward.OAR) -> jnp.ndarray:
+    """Embed each of the (observation, action, reward) inputs & concatenate."""
+
+    # Add dummy batch dimension to observation if necessary.
+    # This is needed because Conv2D assumes a leading batch dimension, i.e.
+    # that inputs are in [B, H, W, C] format.
+    expand_obs = len(inputs.observation[0].shape) == 3
+    if expand_obs:
+        
+        inputs = inputs._replace(
+          observation=[jnp.expand_dims(inputs.observation[0], axis=0), jnp.expand_dims(inputs.observation[1], axis=0)])
+    features = self.torso(inputs.observation)  # [T?, B, D]
+    if expand_obs:
+      features = jnp.squeeze(features, axis=0)
+
+    # Do a one-hot embedding of the actions.
+    action = jax.nn.one_hot(
+        inputs.action, num_classes=self.num_actions)  # [T?, B, A]
+
+    # Map rewards -> [-1, 1].
+    reward = jnp.tanh(inputs.reward)
+
+    # Add dummy trailing dimensions to rewards if necessary.
+    while reward.ndim < action.ndim:
+      reward = jnp.expand_dims(reward, axis=-1)
+
+    # Concatenate on final dimension.
+    embedding = jnp.concatenate(
+        [features, action, reward], axis=-1)  # [T?, B, D+A+1]
+
+    return embedding
 
 class Flatten(hk.Module):
     def __init__(self, name="Flatten"):
@@ -69,9 +109,9 @@ class DeepSimfishTorso(hk.Module):
     # into the rest of a bigger network.
     self.mlp_head = hk.nets.MLP(output_sizes=hidden_sizes, activate_final=True)
 
-  def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-    left_eye = x[:, :, :, 0]
-    right_eye = x[:, ::-1, :, 1]
+  def __call__(self, x: [jnp.ndarray, jnp.ndarray]) -> jnp.ndarray:
+    left_eye = x[0][:, :, :, 0]
+    right_eye = x[0][:, ::-1, :, 1]
     left_eye = self.retina(left_eye)
     right_eye = self.retina(right_eye)
     output = jnp.concatenate([left_eye, right_eye], axis=-1)
@@ -79,6 +119,10 @@ class DeepSimfishTorso(hk.Module):
     output = jax.nn.relu(output)
     #output = hk.Flatten(preserve_dims=-3)(output)
     output = self.mlp_head(output)
+    # concatenate internal state
+    if len(x) > 1:
+
+        output = jnp.concatenate([output, x[1]], axis=-1)
     return output
 
 # class R2D2Network(R2D2AtariNetwork):
@@ -100,9 +144,9 @@ class R2D2SimfishNetwork(hk.RNNCore):
   def __init__(self, num_actions: int):
     super().__init__(name='r2d2_simfish_network')
     self._embed = OAREmbedding(
-        DeepSimfishTorso(hidden_sizes=[128]), num_actions)
-    self._core = hk.LSTM(512)
-    self._duelling_head = duelling.DuellingMLP(num_actions, hidden_sizes=[512])
+        DeepSimfishTorso(hidden_sizes=[32]), num_actions)
+    self._core = hk.LSTM(64)
+    self._duelling_head = duelling.DuellingMLP(num_actions, hidden_sizes=[64])
     self._num_actions = num_actions
 
   def __call__(

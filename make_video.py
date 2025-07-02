@@ -23,6 +23,10 @@ class DrawingBoard:
         if env_variables["test_sensory_system"]:
             self.dark_light_ratio = 0.5
         self.include_background = include_background
+        if env_variables["salt"]:
+            self.salt_location = data["salt_location"][0]
+        else:
+            self.salt_location = [np.nan, np.nan]
         if include_background:
             self.background = data["sediment"][0,:, :]
             self.background = np.expand_dims(self.background/10, 2)
@@ -54,10 +58,12 @@ class DrawingBoard:
         ccs = np.tile(cc, (len(cx), 1)) + np.tile(np.reshape(cx, (len(cx), 1)), (1, len(cc)))
         return rrs, ccs
 
-    def overlay_salt(self, salt_location):
+    def overlay_salt(self):
         """Show salt source"""
         # Consider modifying so that shows distribution.
-        self.circle(salt_location, 20, (0, 1, 1))
+        if np.isnan(self.salt_location[0]) or np.isnan(self.salt_location[1]):
+            return
+        self.circle(self.salt_location, 20, (0, 1, 1))
 
     def tail(self, head, left, right, tip, color):
         tail_coordinates = np.array((head, left, tip, right))
@@ -285,7 +291,7 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
     if show_energy_state:
         energy_levels = data["energy_state"]
     fish_positions = np.array([data['fish_x'], data['fish_y']]).T
-    num_steps = fish_positions.shape[0]
+    num_steps = 200#fish_positions.shape[0]
     metadata = dict(title='Movie Test', artist='Matplotlib',
                 comment='Movie support!')
     writer = FFMpegWriter(fps=15)#, metadata=metadata)
@@ -368,7 +374,7 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
             if data["predator_x"][step]!=0 and data["predator_y"][step]!=0:
                 predator_position = (data["predator_x"][step], data["predator_y"][step])
                 board.circle(predator_position, env_variables['predator_radius'], (0, 1, 0))
-
+            board.overlay_salt()
             if draw_action_space_usage:
                 if continuous_actions:
                     action_space_strip = draw_action_space_usage_continuous(board.db.shape[0], board.db.shape[1], action_buffer)
@@ -407,9 +413,9 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
             ax0.tick_params(left = False, right = False , labelleft = False ,
                     labelbottom = False, bottom = False)
 
-            left_obs = data['observation'][step, :, :, 0].T
+            left_obs = data['vis_observation'][step, :, :, 0].T
 
-            right_obs = data['observation'][step, :, :, 1].T
+            right_obs = data['vis_observation'][step, :, :, 1].T
             ax1.clear()
             ax2.clear()
             ax1.imshow(left_obs, interpolation='nearest', aspect='auto', vmin=0, vmax=64)
@@ -452,7 +458,7 @@ if __name__ == "__main__":
     model = "local_test_large"
 
     config_file = './Environment/1_env.json'
-    data_file = 'prev_run_backup/20250611-123835/logs/evaluator/logs_203.hdf5'
+    data_file = '/home/asaph/acme/20250701-115150/logs/bbbbb/logs_4.hdf5'
 
     draw_episode(data_file, config_file, continuous_actions=False, show_energy_state=False,
                  trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=10)
