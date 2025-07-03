@@ -341,9 +341,9 @@ class Eye:
 
                 self.red_readings += red_readings_sand_grains * self.env_variables["sand_grain_red_component"]
 
-        if not self.test_mode:
-            self.uv_readings = self.add_noise_to_readings(self.uv_readings)
-            self.red_readings = self.add_noise_to_readings(self.red_readings)
+        #if not self.test_mode:
+        self.uv_readings = self.add_noise_to_readings(self.uv_readings)
+        self.red_readings = self.add_noise_to_readings(self.red_readings)
 
         interp_uv_readings = np.zeros((self.interpolated_observation.shape[0], 1))
         interp_red_readings = np.zeros((self.interpolated_observation.shape[0], 2))

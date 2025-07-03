@@ -52,7 +52,7 @@ from acme.utils.loggers import base as loggers_base
 from acme.utils.loggers import filters
 from acme.jax import networks as networks_lib
 
-from hdf5_logger import HDF5Logger
+from hdf5_logger import HDF5Logger, EnvInfoKeep
 from simfish_r2d2_learner import SimfishR2D2Learner
 from acme.utils.loggers import aggregators
 from acme.agents.jax.r2d2 import learning as r2d2_learning
@@ -105,40 +105,6 @@ class SimfishR2D2Builder(r2d2.R2D2Builder):
         counter=counter,
         logger=logger_fn('learner'))
 
-class EnvInfoKeep(base.EnvLoopObserver):
-  """An observer that collects and accumulates scalars from env's info."""
-
-  def __init__(self):
-    self._metrics = None
-
-  def _accumulate_metrics(self, env: dm_env.Environment, obs) -> None:
-    if not hasattr(env, 'get_info'):
-      return
-    info = getattr(env, 'get_info')()
-    info['action'] = [int(obs.action)]
-    info['vis_observation'] = [obs.observation[0]]
-    info['internal_state'] = [obs.observation[1]]
-    if not info:
-      return
-    for k, v in info.items():
-      self._metrics[k] = self._metrics.get(k, []) + v
-
-  def observe_first(self, env: dm_env.Environment, timestep: dm_env.TimeStep
-                    ) -> None:
-    """Observes the initial state."""
-    sediment = env.board.global_sediment_grating
-    self._metrics = {'sediment': [sediment]}
-    self._accumulate_metrics(env, timestep.observation)
-
-  def observe(self, env: dm_env.Environment, timestep: dm_env.TimeStep,
-              action: np.ndarray) -> None:
-    """Records one environment step."""
-    self._accumulate_metrics(env, timestep.observation)
-
-  def get_metrics(self) -> Dict[str, base.Number]:
-    """Returns metrics collected for the current episode."""
-    return self._metrics
-
 def build_experiment_config():
   """Builds R2D2 experiment config which can be executed in different ways."""
   batch_size = 32
@@ -152,7 +118,7 @@ def build_experiment_config():
   def environment_factory(seed: int) -> dm_env.Environment:
     del seed
     # return DummyEnv()
-    env_variables = json.load(open('Environment/1_env.json', 'r'))
+    env_variables = json.load(open('Environment/2_env.json', 'r'))
     return BaseEnvironment(env_variables=env_variables)
 
   # Configure the agent.
@@ -293,7 +259,7 @@ def build_experiment_config():
       #logger_factory=logger_factory,
       evaluator_factories=eval_factories,
       seed=FLAGS.seed,
-      checkpointing=experiments.CheckpointingConfig(add_uid=True),
+      checkpointing=experiments.CheckpointingConfig(add_uid=False),
       max_num_actor_steps=FLAGS.num_steps)
   
 

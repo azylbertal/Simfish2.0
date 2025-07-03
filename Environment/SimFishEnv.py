@@ -118,7 +118,7 @@ class BaseEnvironment(dm_env.Environment):
         self.predator_attacks_avoided = 0
         self.sand_grains_bumped = 0
         self.energy_level_log = []
-        self.salt_damage = 0
+        self.salt_concentration = 0
         self.switch_step = None
         # New energy system:
         self.fish.energy_level = 1
@@ -126,8 +126,6 @@ class BaseEnvironment(dm_env.Environment):
         # Reset salt gradient
         if self.env_variables["salt"]:
             self.reset_salt_gradient()
-            self.fish.salt_health = 1.0
-            self.salt_damage_history = []
         else:
             self.salt_location = [np.nan, np.nan]
 

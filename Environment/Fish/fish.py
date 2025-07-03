@@ -143,6 +143,7 @@ class Fish:
         self.capture_possible = False
         self.prev_action_impulse = 0
         self.prev_action_angle = 0
+        self.prev_action = 0
 
         # Energy system (new simulation)
         self.energy_level = 1.0
@@ -183,7 +184,7 @@ class Fish:
                 angle_change = -angle_change
 
             if action == 3:
-                reward -= self.env_variables['capture_swim_extra_cost']
+                #reward -= self.env_variables['capture_swim_extra_cost']
                 self.making_capture = True
 
             self.prev_action_angle = angle_change
@@ -193,8 +194,9 @@ class Fish:
         else:
             self.prev_action_impulse = 0
             self.prev_action_angle = 0
-            self.prev_action = action
             reward = 0
+        self.prev_action = action
+        
 
 
 
@@ -247,7 +249,7 @@ class Fish:
         # print()
         # print(self.prev_action_impulse)
         # print()
-        if prev_action == 3:
+        if self.prev_action == 3:
             energy_use *= self.env_variables['capture_swim_energy_cost_scaling']
         reward += (energy_intake * self.consumption_reward_scaling) - (energy_use * self.action_reward_scaling)
 
