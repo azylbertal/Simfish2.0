@@ -95,7 +95,7 @@ class BaseEnvironment(dm_env.Environment):
         self.predator_associated_reward = 0
         self.wall_associated_reward = 0
         self.sand_grain_associated_reward = 0
-
+        self._prey_escape_p_per_physics_step = 1 - (1-self.env_variables["p_escape"])**(1/self.env_variables["phys_steps_per_sim_step"])
 
         self.create_walls()
         #self.reset()
@@ -138,7 +138,6 @@ class BaseEnvironment(dm_env.Environment):
         self.fish_angle_buffer = []
 
         self.failed_capture_attempts = 0
-        self.in_light_history = []
         if self.env_variables['test_sensory_system']:
             self.fish.body.position = (self.env_variables['arena_width'] / 2, self.env_variables['arena_height'] / 2)
             self.fish.body.angle = 0
@@ -257,7 +256,6 @@ class BaseEnvironment(dm_env.Environment):
         self.sand_grain_associated_reward = 0
         self.action_used = np.zeros(12)
 
-        self.num_steps_prey_available = 0
         return dm_env.restart(self.get_observation(action=0, reward=0.))
 
     def set_collisions(self):
@@ -336,15 +334,6 @@ class BaseEnvironment(dm_env.Environment):
         self.sand_grain_shapes = []
         self.sand_grain_bodies = []
 
-
-    def get_prey_within_visual_field(self, max_angular_deviation, max_distance):
-        prey_near = self.check_proximity_all_prey(sensing_distance=max_distance)
-        fish_prey_incidence = self.get_fish_prey_incidence()
-        within_visual_field = np.absolute(fish_prey_incidence) < max_angular_deviation
-
-        prey_in_visual_field = prey_near * within_visual_field
-
-        return prey_in_visual_field
 
     def reproduce_prey(self):
         num_prey = len(self.prey_bodies)
@@ -619,8 +608,7 @@ class BaseEnvironment(dm_env.Environment):
 
         # Do once per step.
         if micro_step == 0:
-            gaits_to_switch = np.random.choice([0, 1], len(self.prey_shapes),
-                                               p=[1 - self.env_variables["p_switch"], self.env_variables["p_switch"]])
+            gaits_to_switch = np.random.rand(len(self.prey_shapes)) < self.env_variables["p_switch"]
             switch_to = np.random.choice([0, 1, 2], len(self.prey_shapes),
                                          p=[1 - (self.env_variables["p_slow"] + self.env_variables["p_fast"]),
                                             self.env_variables["p_slow"], self.env_variables["p_fast"]])
@@ -634,9 +622,8 @@ class BaseEnvironment(dm_env.Environment):
 
             # Large angle changes
             large_turns = np.random.uniform(-np.pi, np.pi, len(self.prey_shapes))
-            turns_implemented = np.random.choice([0, 1], len(self.prey_shapes), p=[1 - self.env_variables["p_reorient"],
-                                                                                   self.env_variables["p_reorient"]])
-            angle_changes = angle_changes + (large_turns * turns_implemented)
+            large_turns_implemented = np.random.rand(len(self.prey_shapes)) < self.env_variables["p_large_turn"]
+            angle_changes = angle_changes + (large_turns * large_turns_implemented)
 
             self.prey_within_range = self.check_proximity_all_prey(self.env_variables["prey_sensing_distance"])
 
@@ -646,31 +633,22 @@ class BaseEnvironment(dm_env.Environment):
                 if self.env_variables["prey_fluid_displacement"]:
                     distance_vector = prey_body.position - self.fish.body.position
                     distance = (distance_vector[0] ** 2 + distance_vector[1] ** 2) ** 0.5
-                    distance_scaling = np.exp(-distance)
+                    distance_scaling = 1/(distance**2)#np.exp(-distance)
 
-                    original_angle = copy.copy(prey_body.angle)
-                    prey_body.angle = self.fish.body.angle + np.random.uniform(-1, 1)
-                    impulse_for_prey = (self.get_last_action_magnitude() / self.env_variables["known_max_fish_i"]) * \
-                                       self.env_variables["displacement_scaling_factor"] * distance_scaling
-
+                    original_angle = prey_body.angle
+                    prey_body.angle = self.fish.body.angle + np.random.uniform(-1, 1) # overall away from fish
+                    impulse_for_prey = self.fish.prev_action_impulse * self.env_variables["prey_fluid_displacement_scaling_factor"] * distance_scaling
                     prey_body.apply_impulse_at_local_point((impulse_for_prey, 0))
                     prey_body.angle = original_angle
 
                 # Motion from prey escape
-                if self.env_variables["prey_jump"] and np.random.choice([0, 1], size=1,
-                                                                        p=[1 - self.env_variables["p_escape"] /
-                                                                           self.env_variables[
-                                                                               "phys_steps_per_sim_step"],
-                                                                           self.env_variables["p_escape"] /
-                                                                           self.env_variables[
-                                                                               "phys_steps_per_sim_step"]])[0] == 1:
+                if np.random.rand() < self._prey_escape_p_per_physics_step:
                     prey_body.apply_impulse_at_local_point((self.env_variables["jump_impulse_paramecia"], 0))
 
-            else:
-                if micro_step == 0:
-                    prey_body.angle = prey_body.angle + angle_changes[i]
+            if micro_step == 0:
+                prey_body.angle = prey_body.angle + angle_changes[i]
 
-                prey_body.apply_impulse_at_local_point((impulses[i], 0))
+            prey_body.apply_impulse_at_local_point((impulses[i], 0))
 
     def touch_prey(self, arbiter, space, data):
         valid_capture = False
@@ -1003,10 +981,6 @@ class BaseEnvironment(dm_env.Environment):
         self.last_action = action
         self.fish.touched_sand_grain = False
 
-        # Visualisation
-        self.action_buffer.append(action)
-        self.fish_angle_buffer.append(self.fish.body.angle)
-        self.position_buffer.append(np.array(self.fish.body.position))
 
         reward = self.fish.take_action(action)
 
@@ -1124,16 +1098,6 @@ class BaseEnvironment(dm_env.Environment):
                     if not self.check_proximity(self.prey_bodies[i].position, 200):
                         self.remove_prey(i)
                         self.available_prey -= 1
-
-        # Log whether fish in light
-        self.in_light_history.append(self.fish.body.position[0] > self.dark_col)
-
-        # Log steps where prey in visual field.
-        if len(self.prey_bodies) > 0:
-            prey_in_visual_field = self.get_prey_within_visual_field(max_angular_deviation=2.2, max_distance=100)
-            num_prey_close = np.sum(prey_in_visual_field * 1)
-            if num_prey_close > 0:
-                self.num_steps_prey_available += 1
 
         self.num_steps += 1
         if self.num_steps >= self.env_variables["max_epLength"]:
