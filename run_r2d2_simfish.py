@@ -24,7 +24,6 @@ import dm_env
 import launchpad as lp
 import json
 from Environment.SimFishEnv import BaseEnvironment
-from Environment.DummyEnv import DummyEnv
 from R2D2Network import make_r2d2_networks
 from acme.utils import loggers
 from typing import Optional
@@ -67,7 +66,7 @@ flags.DEFINE_bool(
     'way. If False, will run single-threaded.')
 flags.DEFINE_string('env_name', 'Pong', 'What environment to run.')
 flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
-flags.DEFINE_integer('num_steps', 25_000_000,
+flags.DEFINE_integer('num_steps', 75_000_000,
                      'Number of environment steps to run for.')
 flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
 
@@ -259,7 +258,7 @@ def build_experiment_config():
       #logger_factory=logger_factory,
       evaluator_factories=eval_factories,
       seed=FLAGS.seed,
-      checkpointing=experiments.CheckpointingConfig(add_uid=False),
+      checkpointing=experiments.CheckpointingConfig(add_uid=True),
       max_num_actor_steps=FLAGS.num_steps)
   
 

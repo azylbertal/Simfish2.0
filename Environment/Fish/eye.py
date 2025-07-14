@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 #import cupy as cp
 from skimage.draw import circle_perimeter
 
-def ray_sum_fully_vectorized(array, start_coord, angles_rad, step_size=0.5):
+def ray_sum(array, start_coord, angles_rad, step_size=0.5):
     """
     Fully vectorized version with NO loops - handles duplicate removal vectorized.
     
@@ -92,9 +92,8 @@ def ray_sum_fully_vectorized(array, start_coord, angles_rad, step_size=0.5):
 
 class Eye:
 
-    def __init__(self, board, verg_angle, retinal_field, is_left, env_variables, max_uv_range,
-                 plot_rfs=False):
-        # Use CUPY if using GPU.
+    def __init__(self, board, verg_angle, retinal_field, is_left, env_variables, max_uv_range,):
+
         self.test_mode = env_variables["test_sensory_system"]
         
         self.viewing_elevations = env_variables["viewing_elevations"]
@@ -102,10 +101,6 @@ class Eye:
         self.uv_object_intensity = env_variables["uv_object_intensity"]
         self.water_uv_scatter = env_variables["water_uv_scatter"]
         self.board = board
-        # self.dark_gain = env_variables['dark_gain']
-        # self.light_gain = env_variables['light_gain']
-        # self.background_brightness = env_variables['background_brightness']
-        #self.dark_col = dark_col
         self.dist = None
         self.theta = None
         self.width, self.height = self.board.get_FOV_size()
@@ -125,8 +120,6 @@ class Eye:
         self.ang_bin = 0.001  # this is the bin size for the projection
         self.ang = np.arange(-np.pi, np.pi + self.ang_bin,
                                                    self.ang_bin)  # this is the angle range for the projection
-
-        self.filter_bins = 20  # this is the number of bins for the scattering filter
 
         self.uv_photoreceptor_rf_size = env_variables['uv_photoreceptor_rf_size']
         self.red_photoreceptor_rf_size = env_variables['red_photoreceptor_rf_size']
@@ -148,12 +141,7 @@ class Eye:
         self.uv_readings = np.zeros((self.uv_photoreceptor_num, 1))
         self.red_readings = np.zeros((self.red_photoreceptor_num, 1))
         self.total_photoreceptor_num = self.uv_photoreceptor_num + self.red_photoreceptor_num
-        # Compute minimum lines that need to be extrapolated so as not to miss coordinates.
-        #self.n = self.compute_n(max([self.uv_photoreceptor_rf_size, self.red_photoreceptor_rf_size]))
 
-        if plot_rfs:
-            self.plot_photoreceptors(self.uv_photoreceptor_angles.get(), self.red_photoreceptor_angles.get(),
-                                        self.uv_photoreceptor_rf_size, self.red_photoreceptor_rf_size, is_left)
         # Compute repeated measures:
         self.photoreceptor_angles_surrounding = None
         self.photoreceptor_angles_surrounding_red = None
@@ -163,11 +151,6 @@ class Eye:
         self.addition_matrix = None
         self.conditional_tiled = None
         self.multiplication_matrix = None
-        #self.get_repeated_computations()
-
-        # self.photoreceptor_angles_surrounding_stacked = np.concatenate((self.photoreceptor_angles_surrounding,
-        #                                                                                       self.photoreceptor_angles_surrounding_red),
-        #                                                                                      axis=0)
 
     @staticmethod
     def plot_photoreceptors(uv_photoreceptor_angles, red_photoreceptor_angles, uv_photoreceptor_rf_size,
@@ -196,61 +179,6 @@ class Eye:
         fig.clf()
         # plt.ion()
 
-    def get_repeated_computations(self):
-        """
-        Pre-computes and stores in memory all sets of repeated values for the read_stacked method:
-           - self.photoreceptor_angles_surrounding - The angles, from the midline of the fish, which enclose the active
-           region of each UV photoreceptor
-           - self.photoreceptor_angles_surrounding_red  - " but for all red photoreceptors
-           - self.mul_for_hypothetical
-           - self.add_for_hypothetical
-           - self.mul1_full
-           - self.addition_matrix
-           - self.conditional_tiled
-           - self.multiplication_matrix
-
-        """
-
-        # UV
-        photoreceptor_angles_surrounding = np.expand_dims(self.uv_photoreceptor_angles, 1)
-        photoreceptor_angles_surrounding = np.repeat(photoreceptor_angles_surrounding, self.n, 1)
-        rf_offsets = np.linspace(-self.uv_photoreceptor_rf_size / 2,
-                                                       self.uv_photoreceptor_rf_size / 2, num=self.n)
-        self.photoreceptor_angles_surrounding = photoreceptor_angles_surrounding + rf_offsets
-
-        # Red
-        photoreceptor_angles_surrounding_2 = np.expand_dims(self.red_photoreceptor_angles, 1)
-        photoreceptor_angles_surrounding_2 = np.repeat(photoreceptor_angles_surrounding_2, self.n, 1)
-        rf_offsets_2 = np.linspace(-self.red_photoreceptor_rf_size / 2,
-                                                         self.red_photoreceptor_rf_size / 2, num=self.n)
-        self.photoreceptor_angles_surrounding_red = photoreceptor_angles_surrounding_2 + rf_offsets_2
-
-        n_photoreceptors_in_computation_axis_0 = self.total_photoreceptor_num
-
-        # Same for both, just requires different dimensions
-        mul_for_hypothetical = np.array([[1, 0], [0, 1], [1, 0], [0, 1]])
-        self.mul_for_hypothetical = np.tile(mul_for_hypothetical,
-                                                                  (n_photoreceptors_in_computation_axis_0, self.n, 1, 1))
-        add_for_hypothetical = np.array(
-            [[0, 0], [0, 0], [0, self.width - 1], [self.height - 1, 0]])
-        self.add_for_hypothetical = np.tile(add_for_hypothetical,
-                                                                  (n_photoreceptors_in_computation_axis_0, self.n, 1, 1))
-
-        mul1 = np.array([0, 0, 0, 1])
-        self.mul1_full = np.tile(mul1, (n_photoreceptors_in_computation_axis_0, self.n, 1))
-
-        addition_matrix_unit = np.array([0, 0, self.height - 1, self.width - 1])
-        self.addition_matrix = np.tile(addition_matrix_unit,
-                                                             (n_photoreceptors_in_computation_axis_0, self.n, 1))
-
-        conditional_tiled = np.array(
-            [self.width - 1, self.height - 1, self.width - 1, self.height - 1])
-        self.conditional_tiled = np.tile(conditional_tiled,
-                                                               (n_photoreceptors_in_computation_axis_0, self.n, 1))
-
-        multiplication_matrix_unit = np.array([-1, 1, -1, 1])
-        self.multiplication_matrix = np.tile(multiplication_matrix_unit,
-                                                                   (n_photoreceptors_in_computation_axis_0, self.n, 1))
 
     def update_angles_sigmoid(self, verg_angle, retinal_field, is_left):
         """Set the eyes visual angles to be a sigmoidal distribution."""
@@ -288,27 +216,13 @@ class Eye:
         """
         Resolve RF coordinates for each photoreceptor, and use those to sum the relevant pixels.
         """
-        # UV Angles with respect to fish (doubled) (PR_N x n)
-
-        # photoreceptor_angles_surrounding = self.photoreceptor_angles_surrounding_stacked + fish_angle
-        # uv_arena_pixels = masked_arena_pixels[:, :, 1:2]
-        # red_arena_pixels = np.concatenate(
-        #     (masked_arena_pixels[:, :, 0:1], masked_arena_pixels[:, :, 2:]), axis=2)
-        # uv_readings, red_readings = self._read_stacked(masked_arena_pixels_uv=uv_arena_pixels,
-        #                                                masked_arena_pixels_red=red_arena_pixels,
-        #                                                eye_x=eye_x,
-        #                                                eye_y=eye_y,
-        #                                                photoreceptor_angles_surrounding=photoreceptor_angles_surrounding,
-        #                                                n_photoreceptors_uv=self.uv_photoreceptor_num,
-        #                                                n_photoreceptors_red=self.red_photoreceptor_num)
-
-        #uv_readings = np.zeros((self.uv_photoreceptor_num, 1))
         corrected_uv_pr_angles = np.arctan2(np.sin(self.uv_photoreceptor_angles + fish_angle),
                                                                 np.cos(self.uv_photoreceptor_angles + fish_angle))
         eye_FOV_x = eye_x + (uv_lum_mask.shape[1] - 1) / 2
         eye_FOV_y = eye_y + (uv_lum_mask.shape[0] - 1) / 2
 
-        self.uv_readings = self.water_uv_scatter * np.expand_dims(ray_sum_fully_vectorized(uv_lum_mask, (eye_FOV_y, eye_FOV_x), corrected_uv_pr_angles), axis=1)
+        self.uv_readings = self.water_uv_scatter * np.expand_dims(ray_sum(uv_lum_mask, (eye_FOV_y, eye_FOV_x), corrected_uv_pr_angles), axis=1)
+
         self.red_readings = np.zeros((self.red_photoreceptor_num, 2))
         for ii, view_elevation in enumerate(self.viewing_elevations):
             self.red_readings[:, ii] = self._read_elevation(masked_arena_pixels, eye_x, eye_y, view_elevation, fish_angle,
@@ -361,7 +275,6 @@ class Eye:
         
         # if np == cp:
         #     self.readings = self.readings.get()
-
     def _read_elevation(self, masked_pixels, eye_x, eye_y, elevation_angle, fish_angle, pr_angles, rf_size, predator_left, predator_right, predator_dist):
 
 
@@ -457,13 +370,6 @@ class Eye:
             photons = readings
 
         return photons
-
-    def compute_n(self, photoreceptor_rf_size, max_separation=1):
-        theta_separation = math.asin(max_separation / self.max_visual_range)
-        n = (photoreceptor_rf_size / theta_separation)
-        return int(n)
-
-
 
 def extract_circle_edge_pixels(image: np.ndarray, center: tuple, radius: int):
     """

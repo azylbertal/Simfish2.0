@@ -23,10 +23,10 @@ class DrawingBoard:
         if env_variables["test_sensory_system"]:
             self.dark_light_ratio = 0.5
         self.include_background = include_background
-        # if env_variables["salt"]:
-        #     self.salt_location = data["salt_location"][0]
-        # else:
-        self.salt_location = [np.nan, np.nan]
+        if env_variables["salt"]:
+            self.salt_location = data["salt_location"][0]
+        else:
+            self.salt_location = [np.nan, np.nan]
         if include_background:
             self.background = data["sediment"][0,:, :]
             self.background = np.expand_dims(self.background/10, 2)
@@ -291,7 +291,7 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
     if show_energy_state:
         energy_levels = data["energy_state"]
     fish_positions = np.array([data['fish_x'], data['fish_y']]).T
-    num_steps = 40#fish_positions.shape[0]
+    num_steps = fish_positions.shape[0]
     metadata = dict(title='Movie Test', artist='Matplotlib',
                 comment='Movie support!')
     writer = FFMpegWriter(fps=15)#, metadata=metadata)
@@ -458,7 +458,7 @@ if __name__ == "__main__":
     model = "local_test_large"
 
     config_file = './Environment/2_env.json'
-    data_file = '/home/asaph/acme/20250703-090734/logs/evaluator/logs_1.hdf5'
+    data_file = '/home/asaph/acme/20250709-155347/logs/bbbbb/logs_2.hdf5'
 
     draw_episode(data_file, config_file, continuous_actions=False, show_energy_state=False,
                  trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=10)

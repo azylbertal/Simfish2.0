@@ -25,7 +25,6 @@ import dm_env
 import launchpad as lp
 import json
 from Environment.SimFishEnv import BaseEnvironment
-from Environment.DummyEnv import DummyEnv
 from R2D2Network import make_r2d2_networks
 from acme.utils import loggers
 from typing import Optional
@@ -88,8 +87,7 @@ def build_experiment_config():
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
     del seed
-    # return DummyEnv()
-    env_variables = json.load(open('Environment/1_env.json', 'r'))
+    env_variables = json.load(open('Environment/2_env.json', 'r'))
     return BaseEnvironment(env_variables=env_variables)
 
   # Configure the agent.

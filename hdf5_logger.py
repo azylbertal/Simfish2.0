@@ -36,13 +36,15 @@ class EnvInfoKeep(base_observers.EnvLoopObserver):
   def __init__(self):
     self._metrics = None
 
-  def _accumulate_metrics(self, env: dm_env.Environment, obs) -> None:
+  def _accumulate_metrics(self, env: dm_env.Environment, obs, actor_state: Optional[np.ndarray] = None) -> None:
     if not hasattr(env, 'get_info'):
       return
     info = getattr(env, 'get_info')()
     info['action'] = [int(obs.action)]
     info['vis_observation'] = [obs.observation[0]]
     info['internal_state'] = [obs.observation[1]]
+    if actor_state is not None:
+      info['actor_state'] = [actor_state]
     if not info:
       return
     for k, v in info.items():
@@ -56,9 +58,9 @@ class EnvInfoKeep(base_observers.EnvLoopObserver):
     self._accumulate_metrics(env, timestep.observation)
 
   def observe(self, env: dm_env.Environment, timestep: dm_env.TimeStep,
-              action: np.ndarray) -> None:
+              action: np.ndarray, actor_state: Optional[np.ndarray] = None) -> None:
     """Records one environment step."""
-    self._accumulate_metrics(env, timestep.observation)
+    self._accumulate_metrics(env, timestep.observation, actor_state)
 
   def get_metrics(self) -> Dict[str, base_observers.Number]:
     """Returns metrics collected for the current episode."""
