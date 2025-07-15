@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import h5py
 import numpy as np
 
-dir = '/home/asaph/acme/20250709-155347/logs/bbbbb'
+dir = '/home/asaph/cs_cluster/acme/20250714-170106/logs/evaluator'
 
 
 # find all files in the directory that start with 'logs_' and end with '.hdf5'
@@ -19,6 +19,9 @@ def get_hdf5_files(directory):
 files = get_hdf5_files(dir)
 start_dist = []
 end_dist = []
+episode_return = []
+actor_steps = []
+plt.figure()
 for file in files:
     print(file)
 
@@ -27,6 +30,9 @@ for file in files:
         fish_x = f['fish_x'][:]
         fish_y = f['fish_y'][:]
         salt_location = f['salt_location'][:][0]
+        if 'actor_steps' in f:
+            episode_return.append(f['episode_return'][()])
+            actor_steps.append(f['actor_steps'][()])
 
         fish_x -= salt_location[0]
         fish_y -= salt_location[1]
@@ -38,6 +44,8 @@ for file in files:
         start_dist.append(np.sqrt(fish_x[0]**2 + fish_y[0]**2))
         end_dist.append(np.sqrt(fish_x[-1]**2 + fish_y[-1]**2))
 
+plt.figure()
+plt.plot(actor_steps, episode_return, 'o-')
 plt.show()
 
 print(f'mean start distance: {np.mean(start_dist)}')

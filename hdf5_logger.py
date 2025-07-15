@@ -1,4 +1,4 @@
-# Copyright 2018 DeepMind Technologies Limited. All rights reserved.
+# Copyright 2025 Asaph Zylbertal
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 
 """A simple HDF5 logger.
 
-Warning: Does not support preemption.
 """
 
 import h5py
@@ -28,7 +27,7 @@ from acme.utils.loggers import base as base_loggers
 from acme.utils.observers import base as base_observers
 import dm_env
 
-from typing import Any, Callable, Dict, Generic, Iterator, Optional, Sequence
+from typing import Dict, Optional
 
 class EnvInfoKeep(base_observers.EnvLoopObserver):
   """An observer that collects and accumulates scalars from env's info."""
@@ -53,7 +52,7 @@ class EnvInfoKeep(base_observers.EnvLoopObserver):
   def observe_first(self, env: dm_env.Environment, timestep: dm_env.TimeStep
                     ) -> None:
     """Observes the initial state."""
-    sediment = env.board.global_sediment_grating
+    sediment = env.arena.global_sediment_grating
     self._metrics = {'sediment': [sediment], 'salt_location': [env.salt_location]}
     self._accumulate_metrics(env, timestep.observation)
 
@@ -130,6 +129,3 @@ class HDF5Logger(base_loggers.Logger):
     pass
   
 
-#   @property
-#   def file_path(self) -> str:
-#     return self._file.name

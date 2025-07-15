@@ -1,7 +1,21 @@
+# Copyright 2025 Asaph Zylbertal & Sam Pink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import numpy as np
 import pymunk
 
-from Environment.Fish.eye import Eye
+from simulation.eye import Eye
 
 def draw_angle_dist(bout_id):
     if bout_id == 0:  # Slow2
@@ -49,11 +63,9 @@ def draw_angle_dist(bout_id):
     return bout_vals[0, 1], bout_vals[0, 0], mean[1], mean[0]
 
 class Fish:
-    """
-    Created to simplify the SimState class, while making it easier to have environments with multiple agents in future.
-    """
 
-    def __init__(self, board, env_variables, max_uv_range):
+
+    def __init__(self, env_variables, max_uv_range):
 
         # For the purpose of producing a calibration curve.
         inertia = pymunk.moment_for_circle(env_variables['fish_mass'], 0, env_variables['fish_head_radius'], (0, 0))
@@ -87,9 +99,9 @@ class Fish:
         self.conv_state = 0
 
 
-        self.left_eye = Eye(board, self.verg_angle, self.retinal_field, True, env_variables,
+        self.left_eye = Eye(self.verg_angle, self.retinal_field, True, env_variables,
                             max_uv_range=self.max_uv_range)
-        self.right_eye = Eye(board, self.verg_angle, self.retinal_field, False, env_variables,
+        self.right_eye = Eye(self.verg_angle, self.retinal_field, False, env_variables,
                              max_uv_range=self.max_uv_range)
 
         self.hungry = 0
@@ -145,7 +157,7 @@ class Fish:
 
             self.prev_action_angle = angle_change
             self.body.angle += self.prev_action_angle
-            self.prev_action_impulse = self.calculate_impulse(distance)
+            self.prev_action_impulse = self.distance_to_impulse(distance)
             self.body.apply_impulse_at_local_point((self.prev_action_impulse, 0))
         else:
             self.prev_action_impulse = 0
@@ -163,7 +175,7 @@ class Fish:
         return reward
 
 
-    def calculate_impulse(self, distance):
+    def distance_to_impulse(self, distance):
         """
         Uses the derived distance-mass-impulse relationship to convert an input distance (in mm) to impulse
         (arbitrary units).
@@ -174,12 +186,6 @@ class Fish:
         # return (distance * 10) * 0.360574383  # From mm
         return (distance * 10) * 0.34452532909386484  # From mm
 
-    def readings_to_photons(self, readings):
-        """Rounds down observations to form array of discrete photon events."""
-        photons = np.floor(readings).astype(int)
-        photons = photons.clip(0, 255)
-
-        return photons
 
     def update_energy_level(self, reward, consumption):
         """Updates the current energy state for continuous and discrete fish."""

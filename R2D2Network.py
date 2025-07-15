@@ -1,26 +1,26 @@
-# modified from R2D2AtariNetwork and r2d2.make_atari_networks
-# Author: Robert Wong
+# Copyright 2025 Asaph Zylbertal
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-"""Common networks
 
-Glossary of shapes:
-- T: Sequence length.
-- B: Batch size.
-- A: Number of actions.
-- D: Embedding size.
-- X?: X is optional (e.g. optional batch/sequence dimension).
-
-"""
-from acme.jax.networks import R2D2AtariNetwork
 from acme import specs
 from acme.jax import networks as networks_lib
 from acme.jax.networks import duelling
 
-#from acme.jax.networks.embedding import OAREmbedding
 import haiku as hk
 import jax.numpy as jnp
 import jax
-from typing import Optional, Tuple, Sequence, Type
+from typing import Optional, Tuple, Sequence
 from acme.wrappers import observation_action_reward
 from acme.jax.networks import base
 import dataclasses
@@ -96,6 +96,7 @@ class retina(hk.Module):
             return jnp.reshape(outputs, [outputs.shape[0], -1])
         else:
             return jnp.reshape(outputs, [-1])
+        
 class DeepSimfishTorso(hk.Module):
   """Deep torso for Atari, from the IMPALA paper."""
 
@@ -124,15 +125,6 @@ class DeepSimfishTorso(hk.Module):
 
         output = jnp.concatenate([output, x[1]], axis=-1)
     return output
-
-# class R2D2Network(R2D2AtariNetwork):
-#     """A duelling recurrent network for use with vector observations compatible with R2D2."""
-
-#     def __init__(self, num_actions: int):
-#         super().__init__(num_actions)
-#         #self._embed = OAREmbedding(Flatten(), num_actions)
-#         self._embed = OAREmbedding(DeepSimfishTorso(hidden_sizes=[128], use_layer_norm=True), num_actions)
-
 
 
 class R2D2SimfishNetwork(hk.RNNCore):

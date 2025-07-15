@@ -1,13 +1,23 @@
-import copy
+# Copyright 2025 Asaph Zylbertal
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import numpy as np
 import json
-import math
 import matplotlib.pyplot as plt
 import skimage.draw as draw
 from skimage import io
 import h5py
-#from Configurations.Networks.original_network import base_network_layers, ops, connectivity
 from skimage.transform import resize, rescale
 from matplotlib.animation import FFMpegWriter
 
@@ -197,75 +207,11 @@ def draw_previous_actions(board, past_actions, past_positions, fish_angles, adju
     return board, past_actions, past_positions, fish_angles
 
 
-def draw_action_space_usage_continuous(current_height, current_width, action_buffer, max_impulse=10, max_angle=1):
-    difference = 300
-    extra_area = np.zeros((current_height, difference - 20, 3))
-    available_height = current_height-20
-
-    impulse_resolution = 4
-    angle_resolution = 20
-
-    # Create counts for binned actions
-    impulse_bins = np.linspace(0, max_impulse, int(max_impulse * impulse_resolution))
-    binned_impulses = np.digitize(np.array(action_buffer)[:, 0], impulse_bins)
-    impulse_bin_counts = np.array([np.count_nonzero(binned_impulses == i) for i in range(len(impulse_bins))]).astype(float)
-
-    angle_bins = np.linspace(-max_angle, max_angle, int(max_angle * angle_resolution))
-    binned_angles = np.digitize(np.array(action_buffer)[:, 1], angle_bins)
-    angle_bin_counts = np.array([np.count_nonzero(binned_angles == i) for i in range(len(angle_bins))]).astype(float)
-
-    impulse_bin_scaling = (difference-20)/max(impulse_bin_counts)
-    angle_bin_scaling = (difference-20)/max(angle_bin_counts)
-
-    impulse_bin_counts *= impulse_bin_scaling
-    angle_bin_counts *= angle_bin_scaling
-
-    impulse_bin_counts = np.floor(impulse_bin_counts).astype(int)
-    angle_bin_counts = np.floor(angle_bin_counts).astype(int)
-
-    bin_height = int(math.floor(available_height / (len(impulse_bin_counts) + len(angle_bin_counts))))
-
-    current_h = 0
-    for count in impulse_bin_counts:
-        extra_area[current_h:current_h+bin_height, 0:count, :] = 255.0
-        current_h += bin_height
-
-    current_h += 100
-
-    for count in angle_bin_counts:
-        extra_area[current_h:current_h+bin_height, 0:count, :] = 255.0
-        current_h += bin_height
-
-    x = extra_area[:, :, 0]
-
-    return extra_area
-
-
-def draw_action_space_usage_discrete(current_height, current_width, action_buffer):
-    difference = 300
-    extra_area = np.zeros((current_height, difference - 20, 3))
-
-    action_bins = [i for i in range(10)]
-    action_bin_counts = np.array([np.count_nonzero(np.array(action_buffer) == i) for i in action_bins]).astype(float)
-
-    action_bin_scaling = (difference-20)/max(action_bin_counts)
-    action_bin_counts *= action_bin_scaling
-    action_bin_counts = np.floor(action_bin_counts).astype(int)
-
-    bin_height = int(math.floor(current_width/len(action_bins)))
-
-    current_h = 0
-
-    for count in action_bin_counts:
-        extra_area[current_h:current_h+bin_height, 0:count, :] = 255.0
-        current_h += bin_height
-
-    return extra_area
 
 
 def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_actions=True, show_energy_state=False,
-                 scale=1.0, draw_action_space_usage=True, trim_to_fish=False, showed_region_quad=500, n_actions_to_show=500,
-                 save_id="placeholder", s_per_frame=0.03, include_background=False, as_gif=False):
+                 scale=1.0, trim_to_fish=False, showed_region_quad=500, n_actions_to_show=500,
+                 save_id="placeholder", s_per_frame=0.03, include_background=False):
     
     with open(config_file, 'r') as f:
         env_variables = json.load(f)
@@ -294,20 +240,12 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
     num_steps = fish_positions.shape[0]
     metadata = dict(title='Movie Test', artist='Matplotlib',
                 comment='Movie support!')
-    writer = FFMpegWriter(fps=15)#, metadata=metadata)
+    writer = FFMpegWriter(fps=15, metadata=metadata)
     print(writer.supported_formats)
-    frames = []
     action_buffer = []
     position_buffer = []
     orientation_buffer = []
     consumption_buffer = []
-    if trim_to_fish:
-        frames = np.zeros((num_steps, int(scale * showed_region_quad*2), int(scale * showed_region_quad*2), 3))
-    else:
-        if draw_action_space_usage:
-            addon = 300
-        else:
-            addon = 0
                 
         #frames = np.zeros((num_steps, int(env_variables["arena_height"]*scale), int((env_variables["arena_width"]+addon)*scale), 3))
     with writer.saving(fig, "writer_test.mp4", 100):
@@ -375,15 +313,7 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
                 predator_position = (data["predator_x"][step], data["predator_y"][step])
                 board.circle(predator_position, env_variables['predator_radius'], (0, 1, 0))
             board.overlay_salt()
-            if draw_action_space_usage:
-                if continuous_actions:
-                    action_space_strip = draw_action_space_usage_continuous(board.db.shape[0], board.db.shape[1], action_buffer)
-                else:
-                    action_space_strip = draw_action_space_usage_discrete(board.db.shape[0], board.db.shape[1], action_buffer)
-
-                frame = np.hstack((board.db, np.zeros((board.db.shape[0], 20, 3)), action_space_strip))
-            else:
-                frame = board.db
+            frame = board.db
 
             if trim_to_fish:
                 centre_y, centre_x = fish_positions[step][0], fish_positions[step][1]
@@ -457,8 +387,8 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
 if __name__ == "__main__":
     model = "local_test_large"
 
-    config_file = './Environment/2_env.json'
-    data_file = '/home/asaph/acme/20250709-155347/logs/bbbbb/logs_2.hdf5'
+    config_file = './env_config/test_env.json'
+    data_file = '/home/asaph/acme/20250715-160023/logs/evaluator/logs_1.hdf5'
 
     draw_episode(data_file, config_file, continuous_actions=False, show_energy_state=False,
                  trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=10)

@@ -1,4 +1,17 @@
-import copy
+# Copyright 2025 Asaph Zylbertal & Sam Pink
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import random
 import numpy as np
 import pymunk
@@ -6,8 +19,8 @@ import dm_env
 from dm_env import specs
 import time
 
-from Environment.Board.drawing_board import DrawingBoard
-from Environment.Fish.fish import Fish
+from simulation.arena import Arena
+from simulation.fish import Fish
 from acme.wrappers import observation_action_reward
 
 OAR = observation_action_reward.OAR
@@ -25,29 +38,10 @@ class BaseEnvironment(dm_env.Environment):
         self.num_actions = self.env_variables['num_actions']
 
         
-        print("defining drawing board")
+        print("defining the arena")
         self.max_uv_range = np.absolute(np.log(0.001) / self.env_variables["light_decay_rate"])
 
-        # self.board = DrawingBoard(arena_width=self.env_variables['arena_width'],
-        #                           arena_height=self.env_variables['arena_height'],
-        #                           uv_light_decay_rate=self.env_variables['light_decay_rate'],
-        #                           red_light_decay_rate=self.env_variables['light_decay_rate'],
-        #                           photoreceptor_rf_size=max_photoreceptor_rf_size,
-        #                           prey_radius=self.env_variables['prey_radius'],
-        #                           predator_radius=self.env_variables['predator_radius'],
-        #                           visible_scatter=self.env_variables['background_brightness'],
-        #                           dark_light_ratio=self.env_variables['dark_light_ratio'],
-        #                           dark_gain=self.env_variables['dark_gain'],
-        #                           light_gain=self.env_variables['light_gain'],
-        #                           light_gradient=light_gradient,
-        #                           max_red_range=max_red_range,
-        #                           max_uv_range=self.max_uv_range,
-        #                           red_object_intensity=self.env_variables["background_point_intensity"],
-        #                           sediment_sigma=self.env_variables["sediment_sigma"],
-        #                           #red2_object_intensity=self.env_variables["background_point_intensity"],
-        #                           )
-
-        self.board = DrawingBoard(self.env_variables)
+        self.arena = Arena(self.env_variables)
         print('defining physics')
         self.dark_col = int(self.env_variables['arena_width'] * self.env_variables['dark_light_ratio'])
         if self.dark_col == 0:  # Fixes bug with left wall always being invisible.
@@ -57,10 +51,7 @@ class BaseEnvironment(dm_env.Environment):
         self.space.gravity = pymunk.Vec2d(0.0, 0.0)
         self.space.damping = self.env_variables['drag']
 
-        self.fish = Fish(board=self.board,
-                         env_variables=env_variables,
-                         max_uv_range=self.max_uv_range,
-                         )        
+        self.fish = Fish(env_variables=env_variables, max_uv_range=self.max_uv_range)        
 
 
 
@@ -130,7 +121,7 @@ class BaseEnvironment(dm_env.Environment):
             self.salt_location = [np.nan, np.nan]
 
         self.clear_environmental_features()
-        self.board.reset()
+        self.arena.reset()
 
         self.mask_buffer = []
         self.action_buffer = []
@@ -168,19 +159,6 @@ class BaseEnvironment(dm_env.Environment):
                              self.env_variables['prey_radius'] + self.env_variables[
                          'fish_mouth_radius']) - 120)]
                 for cloud in range(int(self.env_variables["prey_cloud_num"]))]
-
-            self.sand_grain_cloud_locations = [
-                [np.random.randint(
-                    low=120 + self.env_variables['sand_grain_radius'] + self.env_variables['fish_mouth_radius'],
-                    high=self.env_variables['arena_width'] - (
-                            self.env_variables['sand_grain_radius'] + self.env_variables[
-                        'fish_mouth_radius']) - 120),
-                    np.random.randint(
-                        low=120 + self.env_variables['sand_grain_radius'] + self.env_variables['fish_mouth_radius'],
-                        high=self.env_variables['arena_height'] - (
-                                self.env_variables['sand_grain_radius'] + self.env_variables[
-                            'fish_mouth_radius']) - 120)]
-                for cloud in range(int(self.env_variables["sand_grain_num"]))]
 
             if "fixed_prey_distribution" in self.env_variables:
                 if self.env_variables["fixed_prey_distribution"]:
@@ -300,12 +278,6 @@ class BaseEnvironment(dm_env.Environment):
         self.fish_prey_wall2.begin = self.no_collision
         self.pred_prey_wall2 = self.space.add_collision_handler(5, 7)
         self.pred_prey_wall2.begin = self.no_collision
-
-    def draw_walls_and_sediment(self):
-        """Draws the walls and background sediment on the drawing board, which is used for computing visual inputs."""
-        self.board.erase()
-        #self.board.draw_walls()
-        self.board.draw_sediment()
 
     def clear_environmental_features(self):
         """Removes all prey, predators, and sand grains from simulation"""
@@ -938,18 +910,6 @@ class BaseEnvironment(dm_env.Environment):
         if self.last_action == 3:
             self.sand_grains_bumped += 1
 
-    def get_last_action_magnitude(self):
-        return self.fish.prev_action_impulse * self.env_variables['displacement_scaling_factor']
-        # Scaled down both for mass effects and to make it possible for the prey to be caught.
-
-    def displace_sand_grains(self):
-        for i, body in enumerate(self.sand_grain_bodies):
-            if self.check_proximity(self.sand_grain_bodies[i].position,
-                                    self.env_variables['sand_grain_displacement_distance']):
-                self.sand_grain_bodies[i].angle = self.fish.body.angle + np.random.uniform(-1, 1)
-                self.sand_grain_bodies[i].apply_impulse_at_local_point(
-                    (self.get_last_action_magnitude(), 0))
-
     def bring_fish_in_bounds(self):
         # Resolve if fish falls out of bounds.
         if self.fish.body.position[0] < 4 or self.fish.body.position[1] < 4 or \
@@ -958,6 +918,7 @@ class BaseEnvironment(dm_env.Environment):
             new_position = pymunk.Vec2d(np.clip(self.fish.body.position[0], 6, self.env_variables["arena_width"] - 30),
                                         np.clip(self.fish.body.position[1], 6, self.env_variables["arena_height"] - 30))
             self.fish.body.position = new_position
+
     def get_info(self):
         info_dict = {
             'fish_x': [self.fish.body.position[0]],
@@ -969,10 +930,10 @@ class BaseEnvironment(dm_env.Environment):
             'predator_y': [self.predator_body.position[1]] if self.predator_body else [0],
         }
         return info_dict
+    
     def step(self, action: int) -> dm_env.TimeStep:
         
         self.action_used[action] += 1
-        t0 = time.time()
         if self._reset_next_step:
             return self.reset()
             
@@ -1001,11 +962,7 @@ class BaseEnvironment(dm_env.Environment):
 
         for micro_step in range(self.env_variables['phys_steps_per_sim_step']):
             self.move_prey(micro_step)
-            self.displace_sand_grains()
 
-            #if self.env_variables["current_setting"]:
-            #    self.bring_fish_in_bounds()
-            #    self.resolve_currents(micro_step)
             if self.fish.making_capture and self.capture_start <= micro_step <= self.capture_end:
                 self.fish.capture_possible = True
             else:
@@ -1047,11 +1004,6 @@ class BaseEnvironment(dm_env.Environment):
             reward -= self.env_variables["sand_grain_touch_penalty"]
             self.sand_grain_associated_reward -= self.env_variables["sand_grain_touch_penalty"]
 
-        # Relocate fish (Assay mode only)
-        # if self.relocate_fish is not None:
-        #     if self.relocate_fish[self.num_steps]:
-        #         self.transport_fish(self.relocate_fish[self.num_steps])
-
         self.bring_fish_in_bounds()
 
         # Energy level
@@ -1066,18 +1018,10 @@ class BaseEnvironment(dm_env.Environment):
                 done = True
                 self.recent_cause_of_death = "Starvation"
 
-        # Salt health
+        # Salt
         if self.env_variables["salt"]:
             self.salt_concentration = self.salt_gradient[int(self.fish.body.position[0]), int(self.fish.body.position[1])]
-            # self.fish.salt_health = self.fish.salt_health + self.env_variables["salt_recovery"] - self.salt_damage
-            # if self.fish.salt_health > 1.0:
-            #     self.fish.salt_health = 1.0
-            # if self.fish.salt_health < 0:
-            #     pass
-                # done = True
-                # self.recent_cause_of_death = "Salt"
-
-            
+           
             reward -= self.env_variables["salt_reward_penalty"] * self.salt_concentration
             self.salt_associated_reward -= self.env_variables['salt_reward_penalty'] * self.salt_concentration
         else:
@@ -1105,28 +1049,12 @@ class BaseEnvironment(dm_env.Environment):
             done = True
             self.recent_cause_of_death = "Time"
 
-        # Drawing the features visible at this step:
-        self.draw_walls_and_sediment()
-
-
-        # if self.assay_run_version == "Original" and self.num_steps > 2:  # Temporal conditional stops assay buffer size errors.
-        #     if self.check_condition_met():
-        #         print(f"Split condition met at step: {self.num_steps}")
-        #         done = True
-        #         self.switch_step = self.num_steps
         observation = self.get_observation(action, reward)
-        t_step = time.time() - t0
-        #print(f"Step time: {t_step}")
         if done:
             self._reset_next_step = True
             return dm_env.termination(reward=reward, observation=observation)
         else:
             return dm_env.transition(reward=reward, observation=observation)
-
-#        observation, full_masked_image = self.resolve_visual_input()
-#
-#        return observation, reward, internal_state, done, full_masked_image
-
 
     def observation_spec(self) -> specs.BoundedArray:
         """Returns the observation spec."""
@@ -1134,19 +1062,13 @@ class BaseEnvironment(dm_env.Environment):
                                 self.env_variables['energy_state'] + self.env_variables['salt']
         if len_internal_state == 0:
             len_internal_state = 1
-        vis_shape = (len(self.fish.left_eye.interpolated_observation), 3, 2)
-        #obs_spec = specs.Array(shape=vis_shape, dtype=np.float32, name="visual_input")
+        vis_shape = (len(self.fish.left_eye.interpolated_observation_angles), 3, 2)
         obs_spec = [specs.Array(shape=vis_shape, dtype='float32', name="visual_input"),
                     specs.Array(shape=(len_internal_state,), dtype='float32', name="internal_state")]
         return OAR(observation=obs_spec,
             action=specs.Array(shape=(), dtype=int),
             reward=specs.Array(shape=(), dtype=np.float64),
         )
-
-#        return specs.Array(shape=vis_shape, dtype='float32', name="visual_input")
-#        return [specs.Array(shape=vis_shape, dtype='float32', name="visual_input"),
-#                specs.Array(shape=(1, len_internal_state), dtype=np.float32, name="internal_state")]
-    
 
     def action_spec(self) -> specs.DiscreteArray:
         """Returns the action spec."""
@@ -1155,7 +1077,8 @@ class BaseEnvironment(dm_env.Environment):
 
     def get_observation(self, action, reward):
 
-        self.board.FOV.update_field_of_view(self.fish.body.position)
+        self.arena.red_FOV.update_field_of_view(self.fish.body.position)
+        self.arena.uv_FOV.update_field_of_view(self.fish.body.position)
         visual_input = self.resolve_visual_input()
         # print minimal and maximal values of visual input:
         visual_input = visual_input.astype(np.float32)
@@ -1170,7 +1093,6 @@ class BaseEnvironment(dm_env.Environment):
             internal_state_order.append("stress")
         if self.env_variables['energy_state']:
             internal_state.append(self.fish.energy_level)
-            # print(self.fish.energy_level)
             internal_state_order.append("energy_state")
         if self.env_variables['salt']:
             
@@ -1241,14 +1163,14 @@ class BaseEnvironment(dm_env.Environment):
         # Relative eye positions to center of FOV
         right_eye_pos = (
             -np.cos(np.pi / 2 - self.fish.body.angle) * self.env_variables[
-                'eyes_biasx'],# + self.board.max_red_range,
+                'eyes_biasx'],
             +np.sin(np.pi / 2 - self.fish.body.angle) * self.env_variables[
-                'eyes_biasx'])# + self.board.max_red_range)
+                'eyes_biasx'])
         left_eye_pos = (
             +np.cos(np.pi / 2 - self.fish.body.angle) * self.env_variables[
-                'eyes_biasx'],# + self.board.max_red_range,
+                'eyes_biasx'],
             -np.sin(np.pi / 2 - self.fish.body.angle) * self.env_variables[
-                'eyes_biasx'])# + self.board.max_red_range)
+                'eyes_biasx'])
 
         if self.predator_body is not None:
             predator_bodies = np.array([self.predator_body.position])
@@ -1256,31 +1178,13 @@ class BaseEnvironment(dm_env.Environment):
             predator_bodies = np.array([])
 
         prey_locations = [i.position for i in self.prey_bodies]
-        sand_grain_locations = [i.position for i in self.sand_grain_bodies]
-        # full_masked_image, lum_mask = self.board.get_masked_pixels(np.array(self.fish.body.position),
-        #                                                            np.array(prey_locations + sand_grain_locations),
-        #                                                            predator_bodies)
-        bottom_masked_image = self.board.get_masked_bottom()
-        dim = int(np.round(self.max_uv_range * 2 + 1))
-        uv_luminance_mask = np.zeros((dim, dim))
-        enclosed_FOV, local_FOV = self.get_FOV(self.fish.body.position, self.max_uv_range, self.env_variables["arena_width"],
-                                               self.env_variables["arena_height"])
-        lum_slice = self.board.global_luminance_mask[enclosed_FOV[0]:enclosed_FOV[1],
-                                               enclosed_FOV[2]:enclosed_FOV[3]]
-        uv_luminance_mask[local_FOV[0]:local_FOV[1],
-                             local_FOV[2]:local_FOV[3]] = lum_slice
-        uv_luminance_mask *= self.board.uv_scatter
-        # Convert to FOV coordinates (to match eye coordinates)
-        #full_masked_image=None
+        masked_sediment = self.arena.get_masked_sediment()
+        uv_luminance_mask = self.arena.get_uv_luminance_mask()
+
         if len(prey_locations) > 0:
             prey_locations_array = np.array(prey_locations) - np.array(self.fish.body.position) + self.max_uv_range
         else:
             prey_locations_array = np.array([])
-        if len(sand_grain_locations) > 0:
-            sand_grain_locations_array = np.array(sand_grain_locations) - np.array(
-                self.fish.body.position) + self.board.max_visual_distance
-        else:
-            sand_grain_locations_array = np.empty((0, 2))
 
         # check if preditor exists
         if predator_bodies.size > 0:
@@ -1288,10 +1192,11 @@ class BaseEnvironment(dm_env.Environment):
         else:
             predator_left, predator_right, predator_distance = np.nan, np.nan, np.nan
 
-        self.fish.left_eye.read(bottom_masked_image, left_eye_pos[0], left_eye_pos[1], self.fish.body.angle, uv_luminance_mask,
-                                prey_locations_array, sand_grain_locations_array, predator_left, predator_right, predator_distance)
-        self.fish.right_eye.read(bottom_masked_image, right_eye_pos[0], right_eye_pos[1], self.fish.body.angle, uv_luminance_mask,
-                                 prey_locations_array, sand_grain_locations_array, predator_left, predator_right, predator_distance)
-        observation = np.dstack((self.fish.readings_to_photons(self.fish.left_eye.readings),
-                                 self.fish.readings_to_photons(self.fish.right_eye.readings)))
+        left_photons = self.fish.left_eye.read(masked_sediment, left_eye_pos[0], left_eye_pos[1], self.fish.body.angle, uv_luminance_mask,
+                                              prey_locations_array, predator_left, predator_right, predator_distance)
+        right_photons = self.fish.right_eye.read(masked_sediment, right_eye_pos[0], right_eye_pos[1], self.fish.body.angle, uv_luminance_mask,
+                                              prey_locations_array, predator_left, predator_right, predator_distance)
+
+        observation = np.dstack((left_photons, right_photons))
+
         return observation
