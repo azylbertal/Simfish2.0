@@ -20,14 +20,10 @@ class Arena:
     """Class used to create a 2D image of the environment and surrounding features, and use this to compute photoreceptor
     inputs"""
 
-    # def __init__(self, arena_width, arena_height, uv_light_decay_rate, red_light_decay_rate, photoreceptor_rf_size,
-    #              prey_radius, predator_radius, visible_scatter, dark_light_ratio, dark_gain, light_gain,
-    #              light_gradient, max_red_range, max_uv_range, red_object_intensity, sediment_sigma):#, red2_object_intensity):
-    def __init__(self, env_variables):#, red2_object_intensity):
+    def __init__(self, env_variables):
         self.test_mode = env_variables['test_sensory_system']
 
         self.bottom_intensity = env_variables['bottom_intensity']
-        #self.red2_object_intensity = red2_object_intensity
         self.max_uv_range = np.round(np.absolute(np.log(0.001) / env_variables["light_decay_rate"])).astype(np.int32)
 
         self.arena_width = env_variables['arena_width']
