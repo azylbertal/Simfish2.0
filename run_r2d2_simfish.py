@@ -227,7 +227,7 @@ def main(_):
   if FLAGS.run_distributed:
 
     program = experiments.make_distributed_experiment(
-        experiment=config, num_actors=1 if lp_utils.is_local_run() else training_parameters['num_actors'])
+        experiment=config, num_actors=training_parameters['num_actors'])
     lp.launch(program, xm_resources=lp_utils.make_xm_docker_resources(program))
   else:
     print('Running single-threaded.')
