@@ -591,7 +591,9 @@ class BaseEnvironment(dm_env.Environment):
                 if self.env_variables["prey_fluid_displacement_scaling_factor"] > 0:
                     distance_vector = prey_body.position - self.fish.body.position
                     distance = (distance_vector[0] ** 2 + distance_vector[1] ** 2) ** 0.5
-                    distance[distance < 5] = 5  # Prevent division by zero.
+                    if distance<5:  # Prevent division by zero.
+                        distance = 5
+                        
                     distance_scaling = 1/(distance**2)#np.exp(-distance)
 
                     original_angle = prey_body.angle
