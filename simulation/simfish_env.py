@@ -77,7 +77,6 @@ class BaseEnvironment(dm_env.Environment):
 
         self.space.add(self.fish.body, self.fish.mouth, self.fish.head, self.fish.tail)
         self.prey_shapes = []
-        self.sand_grain_shapes = []
         self.prey_cloud_wall_shapes = []
         self.predator_shape = None
         self.energy_associated_reward = 0
@@ -85,7 +84,6 @@ class BaseEnvironment(dm_env.Environment):
         self.salt_associated_reward = 0
         self.predator_associated_reward = 0
         self.wall_associated_reward = 0
-        self.sand_grain_associated_reward = 0
         self._prey_escape_p_per_physics_step = 1 - (1-self.env_variables["p_escape"])**(1/self.env_variables["phys_steps_per_sim_step"])
 
         self.create_walls()
@@ -107,7 +105,6 @@ class BaseEnvironment(dm_env.Environment):
         self.fish.touched_edge_this_step = False
         self.prey_caught = 0
         self.predator_attacks_avoided = 0
-        self.sand_grains_bumped = 0
         self.energy_level_log = []
         self.salt_concentration = 0
         self.switch_step = None
@@ -195,9 +192,6 @@ class BaseEnvironment(dm_env.Environment):
             for i in range(int(self.env_variables['prey_num'])):
                 self.create_prey()
 
-        for i in range(self.env_variables['sand_grain_num']):
-            self.create_sand_grain()
-
         self.impulse_against_fish_previous_step = None
         self.recent_cause_of_death = None
         self.available_prey = self.env_variables["prey_num"]
@@ -213,8 +207,14 @@ class BaseEnvironment(dm_env.Environment):
         self.last_action = None
         self.prey_consumed_this_step = False
 
-        self.touched_sand_grain = False
         self.survived_attack = False
+        self.predator_prob = np.zeros(self.env_variables['max_epLength'])
+
+        predator_epoch_starts = np.random.randint(
+            low=self.env_variables['immunity_steps'], high=self.env_variables['max_epLength'] - self.env_variables['predator_epoch_duration'],
+            size=self.env_variables['predator_epoch_num'])
+        for i in predator_epoch_starts:
+            self.predator_prob[i:i + self.env_variables['predator_epoch_duration']] = self.env_variables['predator_probability_per_epoch_step']
 
         # For Reward tracking (debugging)
         print(f"""REWARD CONTRIBUTIONS:        
@@ -223,7 +223,6 @@ class BaseEnvironment(dm_env.Environment):
               Salt: {self.salt_associated_reward}
               Predator: {self.predator_associated_reward}
               Wall: {self.wall_associated_reward}
-              Sand grain: {self.sand_grain_associated_reward}
               """)
         print(f"actions used: {self.action_used / np.sum(self.action_used)}")
         self.energy_associated_reward = 0
@@ -231,7 +230,6 @@ class BaseEnvironment(dm_env.Environment):
         self.salt_associated_reward = 0
         self.predator_associated_reward = 0
         self.wall_associated_reward = 0
-        self.sand_grain_associated_reward = 0
         self.action_used = np.zeros(12)
 
         return dm_env.restart(self.get_observation(action=0, reward=0.))
@@ -243,7 +241,7 @@ class BaseEnvironment(dm_env.Environment):
         # 1: Edge
         # 2: Prey
         # 3: Fish mouth
-        # 4: Sand grains
+        # 4: Sand grains (not implemented yet)
         # 5: Predator
         # 6: Fish body
         # 7: Prey cloud wall
@@ -262,12 +260,6 @@ class BaseEnvironment(dm_env.Environment):
         self.edge_pred_col = self.space.add_collision_handler(1, 5)
         self.edge_pred_col.begin = self.remove_predator
 
-        self.grain_fish_col = self.space.add_collision_handler(3, 4)
-        self.grain_fish_col.begin = self.touch_grain
-
-        # to prevent predators from knocking out prey  or static grains
-        self.grain_pred_col = self.space.add_collision_handler(4, 5)
-        self.grain_pred_col.begin = self.no_collision
         self.prey_pred_col = self.space.add_collision_handler(2, 5)
         self.prey_pred_col.begin = self.no_collision
 
@@ -282,9 +274,6 @@ class BaseEnvironment(dm_env.Environment):
     def clear_environmental_features(self):
         """Removes all prey, predators, and sand grains from simulation"""
         for i, shp in enumerate(self.prey_shapes):
-            self.space.remove(shp, shp.body)
-
-        for i, shp in enumerate(self.sand_grain_shapes):
             self.space.remove(shp, shp.body)
 
         for i, shp in enumerate(self.prey_cloud_wall_shapes):
@@ -302,10 +291,6 @@ class BaseEnvironment(dm_env.Environment):
         self.paramecia_gaits = []
         self.prey_ages = []
         self.total_prey_created = 0
-
-        self.sand_grain_shapes = []
-        self.sand_grain_bodies = []
-
 
     def reproduce_prey(self):
         num_prey = len(self.prey_bodies)
@@ -357,7 +342,6 @@ class BaseEnvironment(dm_env.Environment):
                 s.friction = 1.
                 s.group = 1
                 s.collision_type = 7
-                s.color = (0, 0, 0)
                 self.space.add(s)
                 self.prey_cloud_wall_shapes.append(s)
 
@@ -386,7 +370,6 @@ class BaseEnvironment(dm_env.Environment):
             s.friction = 1.
             s.group = 1
             s.collision_type = 1
-            s.color = (1, 0, 0)
             self.space.add(s)
 
     @staticmethod
@@ -506,7 +489,6 @@ class BaseEnvironment(dm_env.Environment):
             if self.env_variables["prey_reproduction_mode"]:
                 self.prey_ages.append(int(prey_age))
 
-        self.prey_shapes[-1].color = (0, 0, 1)
         self.prey_shapes[-1].collision_type = 2
         self.space.add(self.prey_bodies[-1], self.prey_shapes[-1])
 
@@ -528,7 +510,7 @@ class BaseEnvironment(dm_env.Environment):
         fish_position = np.expand_dims(np.array(self.fish.body.position), 0)
         fish_prey_vectors = all_prey_positions - fish_position
 
-        fish_prey_distances = ((fish_prey_vectors[:, 0] ** 2) + (fish_prey_vectors[:, 1] ** 2) ** 0.5)
+        fish_prey_distances = ((fish_prey_vectors[:, 0] ** 2) + (fish_prey_vectors[:, 1] ** 2)) ** 0.5
         within_range = fish_prey_distances < sensing_distance
         return within_range
 
@@ -600,11 +582,16 @@ class BaseEnvironment(dm_env.Environment):
             self.prey_within_range = self.check_proximity_all_prey(self.env_variables["prey_sensing_distance"])
 
         for i, prey_body in enumerate(self.prey_bodies):
+            if micro_step == 0:
+                prey_body.angle = prey_body.angle + angle_changes[i]
+            prey_body.apply_impulse_at_local_point((impulses[i], 0))
+
             if self.prey_within_range[i]:
                 # Motion from fluid dynamics
-                if self.env_variables["prey_fluid_displacement"]:
+                if self.env_variables["prey_fluid_displacement_scaling_factor"] > 0:
                     distance_vector = prey_body.position - self.fish.body.position
                     distance = (distance_vector[0] ** 2 + distance_vector[1] ** 2) ** 0.5
+                    distance[distance < 5] = 5  # Prevent division by zero.
                     distance_scaling = 1/(distance**2)#np.exp(-distance)
 
                     original_angle = prey_body.angle
@@ -616,11 +603,9 @@ class BaseEnvironment(dm_env.Environment):
                 # Motion from prey escape
                 if np.random.rand() < self._prey_escape_p_per_physics_step:
                     prey_body.apply_impulse_at_local_point((self.env_variables["jump_impulse_paramecia"], 0))
+                    print('jump!')
 
-            if micro_step == 0:
-                prey_body.angle = prey_body.angle + angle_changes[i]
 
-            prey_body.apply_impulse_at_local_point((impulses[i], 0))
 
     def touch_prey(self, arbiter, space, data):
         valid_capture = False
@@ -724,27 +709,27 @@ class BaseEnvironment(dm_env.Environment):
         fish_position = self.fish.body.position
 
         # Check proximity to left wall
-        if 0 < fish_position[0] < self.env_variables["distance_from_fish"]:
+        if 0 < fish_position[0] < self.env_variables["predator_distance_from_fish"]:
             left = True
         else:
             left = False
 
         # Check proximity to right wall
-        if self.env_variables["arena_width"] - self.env_variables["distance_from_fish"] < fish_position[0] < \
+        if self.env_variables["arena_width"] - self.env_variables["predator_distance_from_fish"] < fish_position[0] < \
                 self.env_variables["arena_width"]:
             right = True
         else:
             right = False
 
         # Check proximity to bottom wall
-        if self.env_variables["arena_height"] - self.env_variables["distance_from_fish"] < fish_position[1] < \
+        if self.env_variables["arena_height"] - self.env_variables["predator_distance_from_fish"] < fish_position[1] < \
                 self.env_variables["arena_height"]:
             bottom = True
         else:
             bottom = False
 
         # Check proximity to top wall
-        if 0 < fish_position[0] < self.env_variables["distance_from_fish"]:
+        if 0 < fish_position[0] < self.env_variables["predator_distance_from_fish"]:
             top = True
         else:
             top = False
@@ -789,24 +774,6 @@ class BaseEnvironment(dm_env.Environment):
         elif y_position > self.env_variables["arena_width"] - buffer_region:
             return True
 
-    def load_predator(self, predator_position, predator_orientation, predator_target):
-
-        self.predator_body = pymunk.Body(self.env_variables['predator_mass'], self.env_variables['predator_inertia'])
-        self.predator_shape = pymunk.Circle(self.predator_body, self.env_variables['predator_radius'])
-        self.predator_shape.elasticity = 1.0
-
-        self.predator_body.position = (predator_position[0], predator_position[1])
-        self.predator_body.angle = predator_orientation
-        self.predator_target = predator_target
-
-        self.predator_shape.color = (0, 1, 0)
-        self.predator_location = (predator_position[0], predator_position[1])
-        self.predator_shape.collision_type = 5
-        self.predator_shape.filter = pymunk.ShapeFilter(
-            mask=pymunk.ShapeFilter.ALL_MASKS ^ 2)  # Category 2 objects cant collide with predator
-
-        self.space.add(self.predator_body, self.predator_shape)
-
     def create_predator(self):
         self.total_predators += 1
         self.predator_body = pymunk.Body(self.env_variables['predator_mass'], self.env_variables['predator_inertia'])
@@ -821,8 +788,8 @@ class BaseEnvironment(dm_env.Environment):
             print("Predator angle from fish: ", np.degrees(angle_from_fish))
         else:
             angle_from_fish = self.select_predator_angle_of_attack()
-        dy = self.env_variables["distance_from_fish"] * np.cos(angle_from_fish)
-        dx = self.env_variables["distance_from_fish"] * np.sin(angle_from_fish)
+        dy = self.env_variables["predator_distance_from_fish"] * np.cos(angle_from_fish)
+        dx = self.env_variables["predator_distance_from_fish"] * np.sin(angle_from_fish)
 
         x_position = fish_position[0] + dx
         y_position = fish_position[1] + dy
@@ -830,7 +797,6 @@ class BaseEnvironment(dm_env.Environment):
         self.predator_body.position = (x_position, y_position)
         self.predator_target = fish_position
 
-        self.predator_shape.color = (0, 1, 0)
         self.predator_location = (x_position, y_position)
 
         self.predator_shape.collision_type = 5
@@ -870,45 +836,6 @@ class BaseEnvironment(dm_env.Environment):
         else:
             pass
 
-    def create_sand_grain(self):
-        self.sand_grain_bodies.append(
-            pymunk.Body(self.env_variables['sand_grain_mass'], self.env_variables['sand_grain_inertia']))
-        self.sand_grain_shapes.append(
-            pymunk.Circle(self.sand_grain_bodies[-1], self.env_variables['sand_grain_radius']))
-        self.sand_grain_shapes[-1].elasticity = 1.0
-
-        if not self.env_variables["differential_prey"]:
-            self.sand_grain_bodies[-1].position = (
-                np.random.randint(self.env_variables['sand_grain_radius'] + self.env_variables['fish_mouth_radius'],
-                                  self.env_variables['arena_width'] - (
-                                          self.env_variables['sand_grain_radius'] + self.env_variables[
-                                      'fish_mouth_radius'])),
-                np.random.randint(self.env_variables['sand_grain_radius'] + self.env_variables['fish_mouth_radius'],
-                                  self.env_variables['arena_height'] - (
-                                          self.env_variables['sand_grain_radius'] + self.env_variables[
-                                      'fish_mouth_radius'])))
-        else:
-            cloud = random.choice(self.sand_grain_cloud_locations)
-            self.sand_grain_bodies[-1].position = (
-                np.random.randint(low=cloud[0] - (self.env_variables["prey_cloud_region_size"] / 2),
-                                  high=cloud[0] + (self.env_variables["prey_cloud_region_size"] / 2)),
-                np.random.randint(low=cloud[1] - (self.env_variables["prey_cloud_region_size"] / 2),
-                                  high=cloud[1] + (self.env_variables["prey_cloud_region_size"] / 2))
-            )
-
-        self.sand_grain_shapes[-1].color = (0, 0, 1)
-
-        self.sand_grain_shapes[-1].collision_type = 4
-        self.sand_grain_shapes[-1].filter = pymunk.ShapeFilter(
-            mask=pymunk.ShapeFilter.ALL_MASKS ^ 2)  # prevents collisions with predator
-
-        self.space.add(self.sand_grain_bodies[-1], self.sand_grain_shapes[-1])
-
-    def touch_grain(self, arbiter, space, data):
-        self.fish.touched_sand_grain = True
-
-        if self.last_action == 3:
-            self.sand_grains_bumped += 1
 
     def bring_fish_in_bounds(self):
         # Resolve if fish falls out of bounds.
@@ -940,8 +867,6 @@ class BaseEnvironment(dm_env.Environment):
         self.fish.making_capture = False
         self.prey_consumed_this_step = False
         self.last_action = action
-        self.fish.touched_sand_grain = False
-
 
         reward = self.fish.take_action(action)
 
@@ -999,10 +924,6 @@ class BaseEnvironment(dm_env.Environment):
             self.predator_associated_reward += self.env_variables["predator_cost"]
             self.survived_attack = False
             self.total_predators_survived += 1
-
-        if self.fish.touched_sand_grain:
-            reward -= self.env_variables["sand_grain_touch_penalty"]
-            self.sand_grain_associated_reward -= self.env_variables["sand_grain_touch_penalty"]
 
         self.bring_fish_in_bounds()
 
@@ -1112,8 +1033,7 @@ class BaseEnvironment(dm_env.Environment):
         else:
 
             if self.predator_location is None and \
-                    np.random.rand(1) < self.env_variables["probability_of_predator"] and \
-                    self.num_steps > self.env_variables['immunity_steps'] and \
+                    np.random.rand() < self.predator_prob[self.num_steps] and \
                     not self.check_fish_not_near_wall():
 
                 self.create_predator()

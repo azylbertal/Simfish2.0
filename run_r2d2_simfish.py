@@ -57,12 +57,18 @@ import optax
 flags.DEFINE_bool(
     'run_distributed', True, 'Should an agent be executed in a distributed '
     'way. If False, will run single-threaded.')
-flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
-flags.DEFINE_integer('num_steps', 75_000_000,
-                     'Number of environment steps to run for.')
+# flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
+# flags.DEFINE_integer('num_steps', 75_000_000,
+#                      'Number of environment steps to run for.')
 flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
 
 FLAGS = flags.FLAGS
+
+training_parameters = {'num_steps': 75_000_000,
+                       'seed': 1,
+                       'evaluator_waiting_minutes': 20,
+                       'num_actors': 25,}
+
 class SimfishR2D2Builder(r2d2.R2D2Builder):
   def make_learner(
       self,
@@ -103,13 +109,13 @@ def build_experiment_config():
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
     del seed
-    env_variables = json.load(open('env_config/3_env.json', 'r'))
+    env_variables = json.load(open('env_config/4_env.json', 'r'))
     return BaseEnvironment(env_variables=env_variables)
 
   # Configure the agent.
   config = r2d2.R2D2Config(
       burn_in_length=8,
-      trace_length=50,
+      trace_length=75,
       sequence_period=20,
       min_replay_size=10,
       batch_size=batch_size,
@@ -129,7 +135,7 @@ def build_experiment_config():
     if steps_key is None:
       steps_key = f'{label}_steps'
 
-    loggers = [HDF5Logger(label=label)]
+    loggers = [HDF5Logger(label=label, wait_min=training_parameters['evaluator_waiting_minutes'],)]
     
     # Dispatch to all writers and filter Nones and by time.
     logger = aggregators.Dispatcher(loggers, loggers_base.to_numpy)
@@ -206,9 +212,9 @@ def build_experiment_config():
       environment_factory=environment_factory,
       #logger_factory=logger_factory,
       evaluator_factories=eval_factories,
-      seed=FLAGS.seed,
+      seed=training_parameters['seed'],
       checkpointing=experiments.CheckpointingConfig(add_uid=True),
-      max_num_actor_steps=FLAGS.num_steps)
+      max_num_actor_steps=training_parameters['num_steps'],)
   
 
   return exp_config
@@ -221,7 +227,7 @@ def main(_):
   if FLAGS.run_distributed:
 
     program = experiments.make_distributed_experiment(
-        experiment=config, num_actors=15 if lp_utils.is_local_run() else 3)
+        experiment=config, num_actors=1 if lp_utils.is_local_run() else training_parameters['num_actors'])
     lp.launch(program, xm_resources=lp_utils.make_xm_docker_resources(program))
   else:
     print('Running single-threaded.')

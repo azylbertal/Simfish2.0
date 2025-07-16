@@ -15,8 +15,8 @@ def reflect_observations(values: types.Nest) -> types.NestedArray:
       lambda x: jnp.flip(x, axis=(3, 5)), values)
 
 def reflect_actions(values: types.Nest) -> types.NestedArray:
-  originals = [values == 1, values == 2, values == 4, values == 5]
-  rflct = [2, 1, 5, 4]
+  originals = [values == 1, values == 2, values == 4, values == 5, values == 7, values == 8, values == 10, values == 11]
+  rflct = [2, 1, 5, 4, 8, 7, 11, 10]
   return jax.tree_map(
       lambda x: jnp.select(originals, rflct, default=x),values)
 

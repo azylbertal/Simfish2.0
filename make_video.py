@@ -298,17 +298,6 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
 
             board.db[rrs, ccs] = (0.5, 0.5, 1)
 
-            # Draw sand grains
-            if env_variables["sand_grain_num"] > 0:
-                px = np.round(np.array([pr.position[0] for pr in data["sand_grain_positions"]])).astype(int)
-                py = np.round(np.array([pr.position[1] for pr in data["sand_grain_positions"]])).astype(int)
-                rrs, ccs = board.multi_circles(px, py, env_variables["prey_size_visualisation"])
-
-                rrs = np.clip(rrs, 0, env_variables["arena_width"] - 1)
-                ccs = np.clip(ccs, 0, env_variables["arena_height"] - 1)
-
-                board.db_visualisation[rrs, ccs] = (0, 0, 1)
-
             if data["predator_x"][step]!=0 and data["predator_y"][step]!=0:
                 predator_position = (data["predator_x"][step], data["predator_y"][step])
                 board.circle(predator_position, env_variables['predator_radius'], (0, 1, 0))
@@ -385,10 +374,9 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
 
 
 if __name__ == "__main__":
-    model = "local_test_large"
 
-    config_file = './env_config/test_env.json'
-    data_file = '/home/asaph/acme/20250715-160023/logs/evaluator/logs_1.hdf5'
+    config_file = './env_config/4_env.json'
+    data_file = '/home/asaph/acme/20250716-132141/logs/evaluator/logs_3.hdf5'
 
     draw_episode(data_file, config_file, continuous_actions=False, show_energy_state=False,
                  trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=10)

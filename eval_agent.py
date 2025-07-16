@@ -1,4 +1,4 @@
-# Copyright 2018 DeepMind Technologies Limited. All rights reserved.
+# Copyright 2025 Asaph Zylbertal
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -6,24 +6,21 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applTrueicable law or agreed to in writing, software
+# Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Runners used for executing local agents."""
 
-import sys
 import time
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, List
 import operator
 
 import acme
 from acme import core
 from acme import specs
-from acme import types
-from acme.jax import utils
+
 from acme.jax.experiments import config
 from acme.tf import savers
 from acme.utils import counting
@@ -179,27 +176,13 @@ def eval_agent(experiment: config.ExperimentConfig):
       replay_client=replay_client,
       counter=counting.Counter(parent_counter, prefix='learner', time_delta=0.))
 
-  checkpointer = None
-  if experiment.checkpointing is not None:
-    checkpointing = experiment.checkpointing
-    checkpointer = savers.Checkpointer(
-        objects_to_save={'learner': learner},
-        subdirectory='learner',
-        time_delta_minutes=checkpointing.time_delta_minutes,
-        directory=checkpointing.directory,
-        add_uid=checkpointing.add_uid,
-        max_to_keep=checkpointing.max_to_keep,
-        keep_checkpoint_every_n_hours=checkpointing.keep_checkpoint_every_n_hours,
-        checkpoint_ttl_seconds=checkpointing.checkpoint_ttl_seconds,
-    )
-
 
   # Create the evaluation actor and loop.
   eval_counter = counting.Counter(
       parent_counter, prefix='evaluator', time_delta=0.)
 #   eval_logger = experiment.logger_factory('evaluator',
 #                                           eval_counter.get_steps_key(), 0)
-  eval_logger = HDF5Logger(label='bbbbb', wait_min=0)
+  eval_logger = HDF5Logger(label='model_evaluation', wait_min=0)
   eval_policy = config.make_policy(
       experiment=experiment,
       networks=networks,

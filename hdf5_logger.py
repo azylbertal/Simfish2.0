@@ -34,6 +34,7 @@ class EnvInfoKeep(base_observers.EnvLoopObserver):
 
   def __init__(self):
     self._metrics = None
+    self.env_variables = None
 
   def _accumulate_metrics(self, env: dm_env.Environment, obs, actor_state: Optional[np.ndarray] = None) -> None:
     if not hasattr(env, 'get_info'):
@@ -53,8 +54,9 @@ class EnvInfoKeep(base_observers.EnvLoopObserver):
                     ) -> None:
     """Observes the initial state."""
     sediment = env.arena.global_sediment_grating
-    self._metrics = {'sediment': [sediment], 'salt_location': [env.salt_location]}
+    self._metrics = {'sediment': [sediment], 'salt_location': [env.salt_location], 'env_variables': env.env_variables}
     self._accumulate_metrics(env, timestep.observation)
+    
 
   def observe(self, env: dm_env.Environment, timestep: dm_env.TimeStep,
               action: np.ndarray, actor_state: Optional[np.ndarray] = None) -> None:
@@ -120,6 +122,16 @@ class HDF5Logger(base_loggers.Logger):
               prey_array[i, :len(value[i])] = value[i]
             # save the array
             f.create_dataset(key, data=prey_array)
+        elif 'env_variables' in key:
+          # if key contains 'env_variables', save it as a group
+          if 'env_variables' not in f:
+            f.create_group('env_variables')
+          # save the env variables
+            for env_key, env_value in value.items():
+              if isinstance(value, np.ndarray):
+                f['env_variables'].create_dataset(env_key, data=env_value)
+              else:
+                f['env_variables'].attrs[env_key] = env_value
         else:
             f.create_dataset(key, data=value)
     # wait to space out the writes
