@@ -7,7 +7,6 @@ import jax.numpy as jnp
 import jax
 from acme.wrappers import observation_action_reward
 from acme.adders.reverb.base import Step
-from random import randint
 OAR = observation_action_reward.OAR
 
 def reflect_observations(values: types.Nest) -> types.NestedArray:
@@ -56,9 +55,7 @@ def reflect_samples(samples: reverb.ReplaySample) -> reverb.ReplaySample:
 
 
 class SimfishR2D2Learner(r2d2_learning.R2D2Learner):
-
-
-    
+  """A learner for the Simfish R2D2 agent, with support for reflection."""
 
   def step(self):
     prefetching_split = next(self._iterator)
@@ -70,9 +67,9 @@ class SimfishR2D2Learner(r2d2_learning.R2D2Learner):
     # sample.
     keys = prefetching_split.host
     samples: reverb.ReplaySample = prefetching_split.device
-
     # toss a coin to decide whether regular or mirrored comes first
-    if randint(0, 1) == 0:
+    key, subkey = jax.random.split(self._state.random_key[0])
+    if jax.random.uniform(subkey) < 0.5:
       # Do a mirrored step first.
       mirrored = [True, False]
     else:

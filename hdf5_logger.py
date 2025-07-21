@@ -41,6 +41,7 @@ class EnvInfoKeep(base_observers.EnvLoopObserver):
       return
     info = getattr(env, 'get_info')()
     info['action'] = [int(obs.action)]
+    info['reward'] = [obs.reward]
     info['vis_observation'] = [obs.observation[0]]
     info['internal_state'] = [obs.observation[1]]
     if actor_state is not None:
@@ -110,7 +111,7 @@ class HDF5Logger(base_loggers.Logger):
     with h5py.File(self.base_path + str(self.called) + '.hdf5', 'w') as f:
       for key, value in data.items():
         # if key contains 'prey'...
-        if 'prey' in key:
+        if key == 'prey_x' or key == 'prey_y':
           # value is a list of lists with variable length. find the maximal length
             max_prey_num = max([len(x) for x in value])
             # create a 2d numpy array with the maximal length

@@ -57,17 +57,23 @@ import optax
 flags.DEFINE_bool(
     'run_distributed', True, 'Should an agent be executed in a distributed '
     'way. If False, will run single-threaded.')
-# flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
-# flags.DEFINE_integer('num_steps', 75_000_000,
-#                      'Number of environment steps to run for.')
-flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
+#flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
 
 FLAGS = flags.FLAGS
 
-training_parameters = {'num_steps': 75_000_000,
+training_parameters = {'num_steps': 100_000_000,
                        'seed': 1,
-                       'evaluator_waiting_minutes': 20,
-                       'num_actors': 25,}
+                       'evaluator_waiting_minutes': 30,
+                       'num_actors': 30,
+                       'burn_in_length': 8,
+                       'trace_length': 75,
+                       'sequence_period': 20,
+                       'min_replay_size': 10,
+                       'batch_size': 32,
+                       'evaluation_epsilon': 1e-3,
+                       'learning_rate': 1e-4,
+                       'target_update_period': 1200,
+                       'variable_update_period': 100}
 
 class SimfishR2D2Builder(r2d2.R2D2Builder):
   def make_learner(
@@ -104,27 +110,25 @@ class SimfishR2D2Builder(r2d2.R2D2Builder):
 
 def build_experiment_config():
   """Builds R2D2 experiment config which can be executed in different ways."""
-  batch_size = 32
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    del seed
     env_variables = json.load(open('env_config/4_env.json', 'r'))
-    return BaseEnvironment(env_variables=env_variables)
+    return BaseEnvironment(env_variables=env_variables, seed=seed)
 
   # Configure the agent.
   config = r2d2.R2D2Config(
-      burn_in_length=8,
-      trace_length=75,
-      sequence_period=20,
-      min_replay_size=10,
-      batch_size=batch_size,
+      burn_in_length=training_parameters['burn_in_length'],
+      trace_length=training_parameters['trace_length'],
+      sequence_period=training_parameters['sequence_period'],
+      min_replay_size=training_parameters['min_replay_size'],
+      batch_size=training_parameters['batch_size'],
       prefetch_size=1,
       samples_per_insert=1.0,
-      evaluation_epsilon=1e-3,
-      learning_rate=1e-4,
-      target_update_period=1200,
-      variable_update_period=100,
+      evaluation_epsilon=training_parameters['evaluation_epsilon'],
+      learning_rate=training_parameters['learning_rate'],
+      target_update_period=training_parameters['target_update_period'],
+      variable_update_period=training_parameters['variable_update_period'],
   )
   network_factory = make_r2d2_networks
   builder = SimfishR2D2Builder(config)

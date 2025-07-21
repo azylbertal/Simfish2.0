@@ -370,13 +370,10 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
     writer.finish()
 
 
-    #make_video(frames, 'try.mp4', duration=len(frames) * s_per_frame, true_image=True)
-
-
 if __name__ == "__main__":
 
     config_file = './env_config/4_env.json'
-    data_file = '/home/asaph/acme/20250716-132141/logs/evaluator/logs_3.hdf5'
+    data_file = '/home/asaph/cs_cluster/acme/20250716-150137/logs/evaluator/logs_166.hdf5'
 
     draw_episode(data_file, config_file, continuous_actions=False, show_energy_state=False,
                  trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=10)

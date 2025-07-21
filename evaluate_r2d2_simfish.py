@@ -42,9 +42,8 @@ def build_experiment_config():
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    del seed
     env_variables = json.load(open('Environment/2_env.json', 'r'))
-    return BaseEnvironment(env_variables=env_variables)
+    return BaseEnvironment(env_variables=env_variables, seed=seed)
 
   # Configure the agent.
   config = r2d2.R2D2Config(

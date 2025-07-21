@@ -20,9 +20,9 @@ class Arena:
     """Class used to create a 2D image of the environment and surrounding features, and use this to compute photoreceptor
     inputs"""
 
-    def __init__(self, env_variables):
+    def __init__(self, env_variables, rng):
         self.test_mode = env_variables['test_sensory_system']
-
+        self.rng = rng
         self.bottom_intensity = env_variables['bottom_intensity']
         self.max_uv_range = np.round(np.absolute(np.log(0.001) / env_variables["light_decay_rate"])).astype(np.int32)
 
@@ -60,7 +60,7 @@ class Arena:
             new_grating[self.arena_height // 2 + 40: self.arena_height // 2 + 120, self.arena_width // 2 + 20: self.arena_width // 2 + 100] = 10.
 
         else:
-            new_grating = np.random.rand(self.arena_width, self.arena_height)
+            new_grating = self.rng.random((self.arena_width, self.arena_height))
             new_grating = gaussian_filter(new_grating, sigma=self.sediment_sigma)
             new_grating -= np.min(new_grating)
             new_grating /= np.max(new_grating)

@@ -17,10 +17,10 @@ import geometry
 
 class Eye:
 
-    def __init__(self, verg_angle, retinal_field, is_left, env_variables, max_uv_range,):
+    def __init__(self, verg_angle, retinal_field, is_left, env_variables, max_uv_range,rng):
 
         self.test_mode = env_variables["test_sensory_system"]
-        
+        self.rng = rng
         self.viewing_elevations = env_variables["viewing_elevations"]
         self.fish_elevation = env_variables["elevation"]
         self.uv_object_intensity = env_variables["uv_object_intensity"]
@@ -231,7 +231,7 @@ class Eye:
     def add_noise_to_readings(self, readings):
         """Samples from Poisson distribution to get number of photons"""
         if self.env_variables["shot_noise"]:
-            photons = np.random.poisson(readings)
+            photons = self.rng.poisson(readings)
         else:
             photons = readings
 
