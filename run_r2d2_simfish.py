@@ -50,6 +50,8 @@ from simfish_r2d2_learner import SimfishR2D2Learner
 from acme.utils.loggers import aggregators
 from acme.agents.jax.r2d2 import learning as r2d2_learning
 from acme.agents.jax.r2d2 import networks as r2d2_networks
+import simfish_r2d2_actor
+
 import optax
 
 
@@ -64,7 +66,7 @@ FLAGS = flags.FLAGS
 training_parameters = {'num_steps': 100_000_000,
                        'seed': 1,
                        'evaluator_waiting_minutes': 30,
-                       'num_actors': 30,
+                       'num_actors': 25,
                        'burn_in_length': 8,
                        'trace_length': 75,
                        'sequence_period': 20,
@@ -74,6 +76,7 @@ training_parameters = {'num_steps': 100_000_000,
                        'learning_rate': 1e-4,
                        'target_update_period': 1200,
                        'variable_update_period': 100}
+
 
 class SimfishR2D2Builder(r2d2.R2D2Builder):
   def make_learner(
@@ -107,6 +110,18 @@ class SimfishR2D2Builder(r2d2.R2D2Builder):
         replay_client=replay_client,
         counter=counter,
         logger=logger_fn('learner'))
+  def make_policy(self,
+                  networks: r2d2_networks.R2D2Networks,
+                  environment_spec: specs.EnvironmentSpec,
+                  evaluation: bool = False) -> simfish_r2d2_actor.R2D2Policy:
+    if evaluation:
+      return simfish_r2d2_actor.get_actor_core(
+          networks,
+          num_epsilons=None,
+          bias_probability=0.0,
+          evaluation_epsilon=self._config.evaluation_epsilon)
+    else:
+      return simfish_r2d2_actor.get_actor_core(networks, self._config.num_epsilons, bias_probability=0.15)
 
 def build_experiment_config():
   """Builds R2D2 experiment config which can be executed in different ways."""

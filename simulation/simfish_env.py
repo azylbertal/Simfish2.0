@@ -26,13 +26,11 @@ OAR = observation_action_reward.OAR
 
 
 class BaseEnvironment(dm_env.Environment):
-    """A base class to represent environments, for extension to ProjectionEnvironment, VVR and Naturalistic
-    environment classes."""
+    """Base class for the Simfish environment."""
 
     def __init__(self, env_variables, seed=None):
 
         super().__init__()
-        print(f'creating env with seed {seed}')
         self.rng = np.random.default_rng(seed=seed)
         self.env_variables = env_variables
         self.num_actions = self.env_variables['num_actions']
@@ -41,9 +39,7 @@ class BaseEnvironment(dm_env.Environment):
         self.max_uv_range = np.absolute(np.log(0.001) / self.env_variables["light_decay_rate"])
 
         self.arena = Arena(self.env_variables, rng=self.rng)
-        self.dark_col = int(self.env_variables['arena_width'] * self.env_variables['dark_light_ratio'])
-        if self.dark_col == 0:  # Fixes bug with left wall always being invisible.
-            self.dark_col = -1
+        self.dark_row = int(self.env_variables['arena_height'] * self.env_variables['dark_light_ratio'])
 
         self.space = pymunk.Space()
         self.space.gravity = pymunk.Vec2d(0.0, 0.0)
@@ -994,7 +990,7 @@ class BaseEnvironment(dm_env.Environment):
         internal_state = []
         internal_state_order = []
         if self.env_variables['in_light']:
-            internal_state.append(self.fish.body.position[0] > self.dark_col)
+            internal_state.append(self.fish.body.position[1] > self.dark_row)
             internal_state_order.append("in_light")
         if self.env_variables['stress']:
             internal_state.append(self.fish.stress)
