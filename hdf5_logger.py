@@ -92,7 +92,8 @@ class SimpleEnvInfoKeep(base_observers.EnvLoopObserver):
     self._metrics['reward_predator'] = self.env.predator_associated_reward
     self._metrics['reward_wall'] = self.env.wall_associated_reward
     self._metrics['reward_consumption'] = self.env.consumption_associated_reward
-    self._metrics['predator_escape_ratio'] = (self.env.total_attacks_avoided) / (self.env.total_attacks_avoided + self.env.total_attacks_captured)
+    self._metrics['predator_avoided'] = self.env.total_attacks_avoided
+    self._metrics['predator_caught'] = self.env.total_attacks_captured
     return self._metrics
 
 class HDF5Logger(base_loggers.Logger):
