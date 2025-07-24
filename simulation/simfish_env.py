@@ -70,7 +70,7 @@ class BaseEnvironment(dm_env.Environment):
         self.prey_cloud_wall_shapes = []
         self.predator_shape = None
         self.energy_associated_reward = 0
-        self.action_associated_reward = 0
+        self.consumption_associated_reward = 0
         self.salt_associated_reward = 0
         self.predator_associated_reward = 0
         self.wall_associated_reward = 0
@@ -207,17 +207,20 @@ class BaseEnvironment(dm_env.Environment):
         # For Reward tracking (debugging)
         print(f"""REWARD CONTRIBUTIONS:        
               Energy: {self.energy_associated_reward}
-              Action: {self.action_associated_reward}
+              Consumption: {self.consumption_associated_reward}
               Salt: {self.salt_associated_reward}
               Predator: {self.predator_associated_reward}
               Wall: {self.wall_associated_reward}
               """)
         print(f"actions used: {self.action_used / np.sum(self.action_used)}")
         self.energy_associated_reward = 0
-        self.action_associated_reward = 0
+        self.consumption_associated_reward = 0
         self.salt_associated_reward = 0
         self.predator_associated_reward = 0
         self.wall_associated_reward = 0
+
+        self.total_attacks_avoided = 0
+        self.total_attacks_captured = 0
         self.action_used = np.zeros(12)
 
         return dm_env.restart(self.get_observation(action=0, reward=0.))
@@ -814,8 +817,7 @@ class BaseEnvironment(dm_env.Environment):
             self.predator_target = None
             if not self.fish.touched_predator:
                 self.survived_attack = True
-        else:
-            pass
+        return False
 
 
     def bring_fish_in_bounds(self):
@@ -857,9 +859,6 @@ class BaseEnvironment(dm_env.Environment):
 
         reward = self.fish.take_action(action)
 
-        # For Reward tracking (debugging)
-        self.action_associated_reward += reward
-
         # For impulse direction logging (current opposition metric)
         self.fish.impulse_vector_x = self.fish.prev_action_impulse * np.sin(self.fish.body.angle)
         self.fish.impulse_vector_y = self.fish.prev_action_impulse * np.cos(self.fish.body.angle)
@@ -899,6 +898,7 @@ class BaseEnvironment(dm_env.Environment):
             reward -= self.env_variables['predator_cost']
             self.survived_attack = False
             self.predator_associated_reward -= self.env_variables["predator_cost"]
+            self.total_attacks_captured += 1
             self.remove_predator()
             self.fish.touched_predator = False
 
@@ -906,15 +906,19 @@ class BaseEnvironment(dm_env.Environment):
             self.event_survived_predator = True
             reward += self.env_variables["predator_avoidance_reward"]
             self.predator_associated_reward += self.env_variables["predator_cost"]
+            self.total_attacks_avoided += 1
             self.survived_attack = False
 
         self.bring_fish_in_bounds()
 
         # Energy level
         if self.env_variables["energy_state"]:
-            old_reward = reward
-            reward = self.fish.update_energy_level(reward, self.prey_consumed_this_step)
-            self.energy_associated_reward += reward - old_reward
+            energy_reward = self.fish.update_energy_level(self.prey_consumed_this_step)
+            reward += energy_reward
+            if self.prey_consumed_this_step:
+                reward += self.env_variables["consumption_bonus_reward"]
+                self.consumption_associated_reward += self.env_variables["consumption_bonus_reward"]
+            self.energy_associated_reward += energy_reward
 
             self.energy_level_log.append(self.fish.energy_level)
             if self.fish.energy_level < 0:

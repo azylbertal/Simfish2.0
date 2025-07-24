@@ -45,12 +45,12 @@ from acme.utils.loggers import base as loggers_base
 from acme.utils.loggers import filters
 from acme.jax import networks as networks_lib
 
-from hdf5_logger import HDF5Logger, EnvInfoKeep
+from hdf5_logger import HDF5Logger, EnvInfoKeep, SimpleEnvInfoKeep
 from simfish_r2d2_learner import SimfishR2D2Learner
 from acme.utils.loggers import aggregators
 from acme.agents.jax.r2d2 import learning as r2d2_learning
 from acme.agents.jax.r2d2 import networks as r2d2_networks
-import simfish_r2d2_actor
+
 
 import optax
 
@@ -66,7 +66,7 @@ FLAGS = flags.FLAGS
 training_parameters = {'num_steps': 100_000_000,
                        'seed': 1,
                        'evaluator_waiting_minutes': 30,
-                       'num_actors': 25,
+                       'num_actors': 30,
                        'burn_in_length': 8,
                        'trace_length': 75,
                        'sequence_period': 20,
@@ -110,18 +110,6 @@ class SimfishR2D2Builder(r2d2.R2D2Builder):
         replay_client=replay_client,
         counter=counter,
         logger=logger_fn('learner'))
-  def make_policy(self,
-                  networks: r2d2_networks.R2D2Networks,
-                  environment_spec: specs.EnvironmentSpec,
-                  evaluation: bool = False) -> simfish_r2d2_actor.R2D2Policy:
-    if evaluation:
-      return simfish_r2d2_actor.get_actor_core(
-          networks,
-          num_epsilons=None,
-          bias_probability=0.0,
-          evaluation_epsilon=self._config.evaluation_epsilon)
-    else:
-      return simfish_r2d2_actor.get_actor_core(networks, self._config.num_epsilons, bias_probability=0.15)
 
 def build_experiment_config():
   """Builds R2D2 experiment config which can be executed in different ways."""
@@ -227,7 +215,7 @@ def build_experiment_config():
   exp_config = experiments.ExperimentConfig(
       builder=builder,
       network_factory=network_factory,
-      #observers=[EnvInfoKeep()],
+      observers=[SimpleEnvInfoKeep()],
       environment_factory=environment_factory,
       #logger_factory=logger_factory,
       evaluator_factories=eval_factories,

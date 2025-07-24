@@ -184,9 +184,9 @@ class Fish:
         return (distance * 10) * 0.34452532909386484  # From mm
 
 
-    def update_energy_level(self, reward, consumption):
+    def update_energy_level(self, consumption):
         """Updates the current energy state for continuous and discrete fish."""
-        energy_change = consumption
+        energy_gain = consumption
 
         if self.action_energy_use_scaling == "Nonlinear":
             energy_use = self.i_scaling_energy_cost * (abs(self.prev_action_impulse) ** 2) + \
@@ -206,9 +206,9 @@ class Fish:
         if self.prev_action == 3:
             energy_use *= self.env_variables['capture_swim_energy_cost_scaling']
         
-        energy_change -= energy_use
+        energy_change = energy_gain - energy_use
 
-        reward += energy_change * self.action_energy_reward_scaling
+        reward = energy_change * self.action_energy_reward_scaling
         self.energy_level += energy_change
 
         self.energy_level = min(self.energy_level, 1.0)  # Ensure energy level does not exceed 1.0

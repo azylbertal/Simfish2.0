@@ -68,6 +68,33 @@ class EnvInfoKeep(base_observers.EnvLoopObserver):
     """Returns metrics collected for the current episode."""
     return self._metrics
 
+class SimpleEnvInfoKeep(base_observers.EnvLoopObserver):
+  """An observer that collects and accumulates scalars from env's info."""
+
+  def __init__(self):
+    self._metrics = None
+
+  def observe_first(self, env: dm_env.Environment, timestep: dm_env.TimeStep
+                    ) -> None:
+    """Observes the initial state."""
+    self.env = env
+    self._metrics = {}    
+
+  def observe(self, env: dm_env.Environment, timestep: dm_env.TimeStep,
+              action: np.ndarray, actor_state: Optional[np.ndarray] = None) -> None:
+    """Records one environment step."""
+    pass
+
+  def get_metrics(self) -> Dict[str, base_observers.Number]:
+    """Returns metrics collected for the current episode."""
+    self._metrics['reward_salt'] = self.env.salt_associated_reward
+    self._metrics['reward_energy'] = self.env.energy_associated_reward
+    self._metrics['reward_predator'] = self.env.predator_associated_reward
+    self._metrics['reward_wall'] = self.env.wall_associated_reward
+    self._metrics['reward_consumption'] = self.env.consumption_associated_reward
+    self._metrics['predator_escape_ratio'] = (self.env.total_attacks_avoided) / (self.env.total_attacks_avoided + self.env.total_attacks_captured)
+    return self._metrics
+
 class HDF5Logger(base_loggers.Logger):
   """Standard HDF5 logger.
 
