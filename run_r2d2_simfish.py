@@ -40,7 +40,7 @@ from acme.utils import loggers
 from acme.utils import observers as observers_lib
 import jax
 import reverb
-
+from acme.utils.loggers import tf_summary
 from acme.utils.loggers import base as loggers_base
 from acme.utils.loggers import filters
 from acme.jax import networks as networks_lib
@@ -59,7 +59,6 @@ import optax
 flags.DEFINE_bool(
     'run_distributed', True, 'Should an agent be executed in a distributed '
     'way. If False, will run single-threaded.')
-#flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
 
 FLAGS = flags.FLAGS
 
@@ -75,7 +74,9 @@ training_parameters = {'num_steps': 100_000_000,
                        'evaluation_epsilon': 1e-3,
                        'learning_rate': 1e-4,
                        'target_update_period': 1200,
-                       'variable_update_period': 100}
+                       'variable_update_period': 100,
+                       'directory': 'my_training'
+                       }
 
 
 class SimfishR2D2Builder(r2d2.R2D2Builder):
@@ -142,16 +143,37 @@ def build_experiment_config():
     if steps_key is None:
       steps_key = f'{label}_steps'
 
-    loggers = [HDF5Logger(label=label, wait_min=training_parameters['evaluator_waiting_minutes'],)]
+    my_loggers = [HDF5Logger(label=label, wait_min=training_parameters['evaluator_waiting_minutes'], \
+                             directory_or_file=training_parameters['directory'], \
+                              add_uid=False)]
     
     # Dispatch to all writers and filter Nones and by time.
-    logger = aggregators.Dispatcher(loggers, loggers_base.to_numpy)
+    logger = aggregators.Dispatcher(my_loggers, loggers_base.to_numpy)
     logger = filters.NoneFilter(logger)
 
     return logger
 
+  def make_tfsummary_logger(label: str,
+                            steps_key: Optional[str] = None,
+                            task_instance: int = 0) -> loggers.Logger:
+    del task_instance
+    if steps_key is None:
+      steps_key = f'{label}_steps'
+
+    my_loggers = [tf_summary.TFSummaryLogger(
+        label=label, logdir=f"{training_parameters['directory']}/logs/training",steps_key=steps_key)]
+    
+    # Dispatch to all writers and filter Nones and by time.
+    logger = aggregators.Dispatcher(my_loggers, loggers_base.to_numpy)
+    logger = filters.NoneFilter(logger)
+    return logger
+  
+    
   def create_hdf5_logger_factory() -> loggers.LoggerFactory:
     return make_hdf5_logger
+  
+  def create_tfsummary_logger_factory() -> loggers.LoggerFactory:
+    return make_tfsummary_logger
     
   def eval_policy_factory(networks: builders.Networks,
                           environment_spec: specs.EnvironmentSpec,
@@ -217,10 +239,10 @@ def build_experiment_config():
       network_factory=network_factory,
       observers=[SimpleEnvInfoKeep()],
       environment_factory=environment_factory,
-      #logger_factory=logger_factory,
+      logger_factory=create_tfsummary_logger_factory(),
       evaluator_factories=eval_factories,
       seed=training_parameters['seed'],
-      checkpointing=experiments.CheckpointingConfig(add_uid=True),
+      checkpointing=experiments.CheckpointingConfig(add_uid=False, directory=training_parameters['directory']),
       max_num_actor_steps=training_parameters['num_steps'],)
   
 

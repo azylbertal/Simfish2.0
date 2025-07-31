@@ -209,13 +209,13 @@ def draw_previous_actions(board, past_actions, past_positions, fish_angles, adju
 
 
 
-def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_actions=True, show_energy_state=False,
+def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, show_energy_state=False,
                  scale=1.0, trim_to_fish=False, showed_region_quad=500, n_actions_to_show=500,
                  save_id="placeholder", s_per_frame=0.03, include_background=False):
     
-    with open(config_file, 'r') as f:
-        env_variables = json.load(f)
+
     with h5py.File(data_file, 'r') as datfl:
+        env_variables = dict(datfl['env_variables'].attrs)
         data = {}
         for key in datfl.keys():
             data[key] = np.array(datfl[key])
@@ -372,10 +372,9 @@ def draw_episode(data_file, config_file, continuous_actions=False,  draw_past_ac
 
 if __name__ == "__main__":
 
-    config_file = './env_config/4_env.json'
-    data_file = '/home/asaph/cs_cluster/acme/20250716-150137/logs/evaluator/logs_166.hdf5'
+    data_file = '/home/asaph/cs_cluster/acme/20250724-140225/logs/evaluator/logs_37.hdf5'
 
-    draw_episode(data_file, config_file, continuous_actions=False, show_energy_state=False,
+    draw_episode(data_file, continuous_actions=False, show_energy_state=False,
                  trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=10)
 
 

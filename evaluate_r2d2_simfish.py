@@ -30,11 +30,11 @@ flags.DEFINE_bool(
     'run_distributed', True, 'Should an agent be executed in a distributed '
     'way. If False, will run single-threaded.')
 flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
-#flags.DEFINE_string('logging_dir', '~/acme', 'Directory to log to.')
 
 FLAGS = flags.FLAGS
 
 
+directory = 'my_training'
 
 def build_experiment_config():
   """Builds R2D2 experiment config which can be executed in different ways."""
@@ -42,7 +42,7 @@ def build_experiment_config():
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    env_variables = json.load(open('Environment/2_env.json', 'r'))
+    env_variables = json.load(open('env_config/4_env.json', 'r'))
     return BaseEnvironment(env_variables=env_variables, seed=seed)
 
   # Configure the agent.
@@ -70,8 +70,8 @@ def build_experiment_config():
       #logger_factory=logger_factory,
       #evaluator_factories=eval_factories,
       seed=FLAGS.seed,
-      checkpointing=experiments.CheckpointingConfig(add_uid=False),
-      max_num_actor_steps=FLAGS.num_steps)
+      checkpointing=experiments.CheckpointingConfig(add_uid=False, directory=directory),
+      max_num_actor_steps=0)
   
 
   return exp_config
@@ -82,7 +82,7 @@ def main(_):
 
 
   print('Running single-threaded.')
-  eval_agent(experiment=config)
+  eval_agent(experiment=config, directory=directory, num_episodes=3)
 
 
 if __name__ == '__main__':

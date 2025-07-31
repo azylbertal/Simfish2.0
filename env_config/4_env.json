@@ -78,7 +78,7 @@
     "in_light": true,
     "salt": true,
     "salt_concentration_decay": 0.002,
-    "action_energy_use_scaling": "Sublinear",
+    "action_energy_use_scaling": "Linear",
     "i_scaling_energy_cost": 0.0005,
     "a_scaling_energy_cost": 0.0005,
     "baseline_energy_use": 0.0002,

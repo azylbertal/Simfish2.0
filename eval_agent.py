@@ -137,7 +137,7 @@ class StateEnvLoop(acme.EnvironmentLoop):
       result.update(observer.get_metrics())
     return result
 
-def eval_agent(experiment: config.ExperimentConfig):
+def eval_agent(experiment: config.ExperimentConfig, directory: str, num_episodes: int = 100):
 
   key = jax.random.PRNGKey(experiment.seed)
 
@@ -182,7 +182,7 @@ def eval_agent(experiment: config.ExperimentConfig):
       parent_counter, prefix='evaluator', time_delta=0.)
 #   eval_logger = experiment.logger_factory('evaluator',
 #                                           eval_counter.get_steps_key(), 0)
-  eval_logger = HDF5Logger(label='model_evaluation', wait_min=0)
+  eval_logger = HDF5Logger(label='model_evaluation', wait_min=0, directory_or_file=directory, add_uid=False)
   eval_policy = config.make_policy(
       experiment=experiment,
       networks=networks,
@@ -200,7 +200,7 @@ def eval_agent(experiment: config.ExperimentConfig):
       logger=eval_logger,
       observers=[EnvInfoKeep()])
 
-  eval_loop.run(num_episodes=100)
+  eval_loop.run(num_episodes=num_episodes)
 
   environment.close()
 

@@ -83,7 +83,7 @@ class Fish:
         if "action_energy_use_scaling" in self.env_variables:
             self.action_energy_use_scaling = self.env_variables["action_energy_use_scaling"]
         else:
-            self.action_energy_use_scaling = "Sublinear"
+            self.action_energy_use_scaling = "Linear"  # Default to linear if not specified
 
 
         # Touch edge - for penalty
