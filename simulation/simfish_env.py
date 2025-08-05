@@ -28,13 +28,13 @@ OAR = observation_action_reward.OAR
 class BaseEnvironment(dm_env.Environment):
     """Base class for the Simfish environment."""
 
-    def __init__(self, env_variables, seed=None):
+    def __init__(self, env_variables, actions, seed=None):
 
         super().__init__()
         self.rng = np.random.default_rng(seed=seed)
         self.env_variables = env_variables
-        self.num_actions = self.env_variables['num_actions']
-
+        self.actions = actions
+        self.num_actions = len(actions)
         
         self.max_uv_range = np.absolute(np.log(0.001) / self.env_variables["light_decay_rate"])
 
@@ -45,7 +45,7 @@ class BaseEnvironment(dm_env.Environment):
         self.space.gravity = pymunk.Vec2d(0.0, 0.0)
         self.space.damping = self.env_variables['drag']
 
-        self.fish = Fish(env_variables=env_variables, max_uv_range=self.max_uv_range, rng=self.rng)       
+        self.fish = Fish(env_variables=env_variables, max_uv_range=self.max_uv_range, rng=self.rng, actions=actions)       
 
         if self.env_variables["salt"]:
             self.salt_gradient = None
@@ -82,7 +82,7 @@ class BaseEnvironment(dm_env.Environment):
 
         self.continuous_actions = False
         self._reset_next_step = True
-        self.action_used = np.zeros(12)
+        self.action_used = np.zeros(self.num_actions)
 
 
 
@@ -221,7 +221,7 @@ class BaseEnvironment(dm_env.Environment):
 
         self.total_attacks_avoided = 0
         self.total_attacks_captured = 0
-        self.action_used = np.zeros(12)
+        self.action_used = np.zeros(self.num_actions)
 
         return dm_env.restart(self.get_observation(action=0, reward=0.))
 
@@ -857,7 +857,8 @@ class BaseEnvironment(dm_env.Environment):
         self.prey_consumed_this_step = False
         self.last_action = action
 
-        reward = self.fish.take_action(action)
+        reward = 0
+        self.fish.take_action(action)
 
         # For impulse direction logging (current opposition metric)
         self.fish.impulse_vector_x = self.fish.prev_action_impulse * np.sin(self.fish.body.angle)

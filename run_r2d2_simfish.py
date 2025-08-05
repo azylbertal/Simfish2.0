@@ -50,34 +50,32 @@ from simfish_r2d2_learner import SimfishR2D2Learner
 from acme.utils.loggers import aggregators
 from acme.agents.jax.r2d2 import learning as r2d2_learning
 from acme.agents.jax.r2d2 import networks as r2d2_networks
-
-
+from define_actions import Actions
 import optax
 
 
 # Flags which modify the behavior of the launcher.
+FLAGS = flags.FLAGS
+
 flags.DEFINE_bool(
     'run_distributed', True, 'Should an agent be executed in a distributed '
     'way. If False, will run single-threaded.')
 
-FLAGS = flags.FLAGS
+flags.DEFINE_integer(
+    'num_actors', 15, 'Number of actors to use in the distributed setting. '
+    'If run_distributed is False, this will be ignored.')
+flags.DEFINE_string(
+    'directory', 'my_training',
+    'Directory to store training logs and checkpoints.')
+flags.DEFINE_integer(
+    'seed', 1, 'Random seed to use for the experiment.')
+flags.DEFINE_integer(
+    'num_steps', 200_000_000, 'Number of steps to run the experiment for.')
 
-training_parameters = {'num_steps': 100_000_000,
-                       'seed': 1,
-                       'evaluator_waiting_minutes': 30,
-                       'num_actors': 30,
-                       'burn_in_length': 8,
-                       'trace_length': 75,
-                       'sequence_period': 20,
-                       'min_replay_size': 10,
-                       'batch_size': 32,
-                       'evaluation_epsilon': 1e-3,
-                       'learning_rate': 1e-4,
-                       'target_update_period': 1200,
-                       'variable_update_period': 100,
-                       'directory': 'my_training'
-                       }
 
+actions = Actions()
+actions.from_hdf5('actions_all_bouts.h5')
+actions_mirror = actions.get_opposing_dict()
 
 class SimfishR2D2Builder(r2d2.R2D2Builder):
   def make_learner(
@@ -110,15 +108,16 @@ class SimfishR2D2Builder(r2d2.R2D2Builder):
         clip_rewards=self._config.clip_rewards,
         replay_client=replay_client,
         counter=counter,
+        actions_mirror=actions_mirror,
         logger=logger_fn('learner'))
 
-def build_experiment_config():
+def build_experiment_config(training_parameters: dict) -> experiments.ExperimentConfig:
   """Builds R2D2 experiment config which can be executed in different ways."""
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
     env_variables = json.load(open('env_config/4_env.json', 'r'))
-    return BaseEnvironment(env_variables=env_variables, seed=seed)
+    return BaseEnvironment(env_variables=env_variables, seed=seed, actions=actions.get_all_actions())
 
   # Configure the agent.
   config = r2d2.R2D2Config(
@@ -250,7 +249,25 @@ def build_experiment_config():
 
 
 def main(_):
-  config = build_experiment_config()
+  training_parameters = {'num_steps': FLAGS.num_steps,
+                       'seed': FLAGS.seed,
+                       'evaluator_waiting_minutes': 30,
+                       'num_actors': FLAGS.num_actors,
+                       'burn_in_length': 8,
+                       'trace_length': 75,
+                       'sequence_period': 20,
+                       'min_replay_size': 10,
+                       'batch_size': 32,
+                       'evaluation_epsilon': 1e-3,
+                       'learning_rate': 1e-4,
+                       'target_update_period': 1200,
+                       'variable_update_period': 100,
+                       'directory': FLAGS.directory,
+                       }
+
+  print(f"Running R2D2 with the following parameters: {training_parameters}")
+
+  config = build_experiment_config(training_parameters)
 
 
   if FLAGS.run_distributed:
