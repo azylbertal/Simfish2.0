@@ -2,7 +2,7 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import zscore, multivariate_normal
-from sklearn.linear_model import LinearRegression
+from scipy import odr
 
 PIXEL_SIZE = 0.058  # mm per pixel, as per the original code
 ALL_BOUT_NAMES = ['SCS', 'LCS', 'BS', 'O-bend', 'J-turn', 'SLC', 'Slow1', 'RT', 'Slow2', 'LLC', 'AS', 'SAT', 'HAT']
@@ -138,16 +138,20 @@ class Actions:
                                          'is_capture': IS_CAPTURE[i], 'color': COLORS[i]})
         # fit a linear regression between the means and the energy
         all_means = np.array(all_means)
-        reg = LinearRegression()
         non_nan_energy = BOUT_ENERGY[~np.isnan(BOUT_ENERGY)]
         non_nan_means = all_means[~np.isnan(BOUT_ENERGY)]
-        reg.fit(non_nan_means, non_nan_energy)
+        data = odr.Data(non_nan_means.T, non_nan_energy)
+        odr_obj = odr.ODR(data, odr.multilinear)
+        output = odr_obj.run()
+        reg = output.beta
+        
+        non_nan_preds = np.dot(non_nan_means, reg[1:]) + reg[0]
+
         plt.figure()
-        non_nan_preds = reg.predict(non_nan_means)
         plt.scatter(non_nan_energy, non_nan_preds, color='black', label='Predicted Energy')
         print("Linear Regression Coefficients:")
-        print(f"Intercept: {reg.intercept_}")
-        print(f"Energy coefficients: {reg.coef_}")
+        print(f"Intercept: {reg[0]}")
+        print(f"Energy coefficients: {reg[1:]}")
          
 
         return all_actions
