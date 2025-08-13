@@ -14,8 +14,89 @@
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from geometry import FieldOfView
 
+class FieldOfView:
+
+    def __init__(self, max_range, env_width, env_height, light_decay_rate):
+        round_max_range = int(np.round(max_range))
+        local_dim = round_max_range * 2 + 1
+        self.local_dim = local_dim
+        self.max_visual_distance = round_max_range
+        self.env_width = env_width
+        self.env_height = env_height
+        self.light_decay_rate = light_decay_rate
+        self.local_scatter = self._get_local_scatter()
+        self.full_fov_top = None
+        self.full_fov_bottom = None
+        self.full_fov_left = None
+        self.full_fov_right = None
+
+        self.local_fov_top = None
+        self.local_fov_bottom = None
+        self.local_fov_left = None
+        self.local_fov_right = None
+
+        self.enclosed_fov_top = None
+        self.enclosed_fov_bottom = None
+        self.enclosed_fov_left = None
+        self.enclosed_fov_right = None
+
+    def _get_local_scatter(self):
+        """Computes effects of absorption and scatter, but incorporates effect of implicit scatter from line spread."""
+        x, y = np.arange(self.local_dim), np.arange(self.local_dim)
+        y = np.expand_dims(y, 1)
+        j = self.max_visual_distance + 1
+        positional_mask = (((x - j) ** 2 + (y - j) ** 2) ** 0.5)  # Measure of distance from centre to every pixel
+        return np.exp(-self.light_decay_rate * positional_mask)
+
+    def update_field_of_view(self, fish_position):
+        fish_position = np.round(fish_position).astype(int)
+
+        self.full_fov_top = fish_position[1] - self.max_visual_distance
+        self.full_fov_bottom = fish_position[1] + self.max_visual_distance + 1
+        self.full_fov_left = fish_position[0] - self.max_visual_distance
+        self.full_fov_right = fish_position[0] + self.max_visual_distance + 1
+
+        self.local_fov_top = 0
+        self.local_fov_bottom = self.local_dim
+        self.local_fov_left = 0
+        self.local_fov_right = self.local_dim
+
+        self.enclosed_fov_top = self.full_fov_top
+        self.enclosed_fov_bottom = self.full_fov_bottom
+        self.enclosed_fov_left = self.full_fov_left
+        self.enclosed_fov_right = self.full_fov_right
+
+        if self.full_fov_top < 0:
+            self.enclosed_fov_top = 0
+            self.local_fov_top = -self.full_fov_top
+
+        if self.full_fov_bottom > self.env_width:
+            self.enclosed_fov_bottom = self.env_width
+            self.local_fov_bottom = self.local_dim - (self.full_fov_bottom - self.env_width)
+
+        if self.full_fov_left < 0:
+            self.enclosed_fov_left = 0
+            self.local_fov_left = -self.full_fov_left
+
+        if self.full_fov_right > self.env_height:
+            self.enclosed_fov_right = self.env_height
+            self.local_fov_right = self.local_dim - (self.full_fov_right - self.env_height)
+
+    def get_sliced_masked_image(self, img):
+
+        # apply FOV portion of luminance mask
+        masked_image = np.zeros((self.local_dim, self.local_dim))
+
+        slice = img[self.enclosed_fov_top:self.enclosed_fov_bottom,
+                    self.enclosed_fov_left:self.enclosed_fov_right]
+        
+        masked_image[self.local_fov_top:self.local_fov_bottom,
+                             self.local_fov_left:self.local_fov_right] = slice
+
+
+        return masked_image * self.local_scatter
+    
 class Arena:
     """Class used to create a 2D image of the environment and surrounding features, and use this to compute photoreceptor
     inputs"""
@@ -75,7 +156,6 @@ class Arena:
         luminance_mask = np.ones((self.arena_width, self.arena_height))
         if self.light_gradient > 0 and dark_field_length > 0:
             luminance_mask[:dark_field_length, :] *= self.dark_gain
-            luminance_mask[dark_field_length:, :] *= 1
             gradient = np.linspace(self.dark_gain, 1, self.light_gradient)
             gradient = np.expand_dims(gradient, 1)
             gradient = np.repeat(gradient, self.arena_height, 1)

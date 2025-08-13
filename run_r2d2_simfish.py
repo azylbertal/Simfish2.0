@@ -116,7 +116,7 @@ def build_experiment_config(training_parameters: dict) -> experiments.Experiment
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    env_variables = json.load(open('env_config/4_env.json', 'r'))
+    env_variables = json.load(open('env_config/5_env.json', 'r'))
     return BaseEnvironment(env_variables=env_variables, seed=seed, actions=actions.get_all_actions())
 
   # Configure the agent.

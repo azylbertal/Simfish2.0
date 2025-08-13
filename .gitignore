@@ -1,7 +1,11 @@
 __pycache__
 .vscode
 quickstart*
+build
 *.mp4
+bouts.mat
+bout_distribution_sam.py
 *.h5
 *.7z
 *.jpg
+*.so

@@ -16,88 +16,6 @@ import numpy as np
 from skimage.draw import circle_perimeter
 
 
-class FieldOfView:
-
-    def __init__(self, max_range, env_width, env_height, light_decay_rate):
-        round_max_range = int(np.round(max_range))
-        local_dim = round_max_range * 2 + 1
-        self.local_dim = local_dim
-        self.max_visual_distance = round_max_range
-        self.env_width = env_width
-        self.env_height = env_height
-        self.light_decay_rate = light_decay_rate
-        self.local_scatter = self._get_local_scatter()
-        self.full_fov_top = None
-        self.full_fov_bottom = None
-        self.full_fov_left = None
-        self.full_fov_right = None
-
-        self.local_fov_top = None
-        self.local_fov_bottom = None
-        self.local_fov_left = None
-        self.local_fov_right = None
-
-        self.enclosed_fov_top = None
-        self.enclosed_fov_bottom = None
-        self.enclosed_fov_left = None
-        self.enclosed_fov_right = None
-
-    def _get_local_scatter(self):
-        """Computes effects of absorption and scatter, but incorporates effect of implicit scatter from line spread."""
-        x, y = np.arange(self.local_dim), np.arange(self.local_dim)
-        y = np.expand_dims(y, 1)
-        j = self.max_visual_distance + 1
-        positional_mask = (((x - j) ** 2 + (y - j) ** 2) ** 0.5)  # Measure of distance from centre to every pixel
-        return np.exp(-self.light_decay_rate * positional_mask)
-
-    def update_field_of_view(self, fish_position):
-        fish_position = np.round(fish_position).astype(int)
-
-        self.full_fov_top = fish_position[1] - self.max_visual_distance
-        self.full_fov_bottom = fish_position[1] + self.max_visual_distance + 1
-        self.full_fov_left = fish_position[0] - self.max_visual_distance
-        self.full_fov_right = fish_position[0] + self.max_visual_distance + 1
-
-        self.local_fov_top = 0
-        self.local_fov_bottom = self.local_dim
-        self.local_fov_left = 0
-        self.local_fov_right = self.local_dim
-
-        self.enclosed_fov_top = self.full_fov_top
-        self.enclosed_fov_bottom = self.full_fov_bottom
-        self.enclosed_fov_left = self.full_fov_left
-        self.enclosed_fov_right = self.full_fov_right
-
-        if self.full_fov_top < 0:
-            self.enclosed_fov_top = 0
-            self.local_fov_top = -self.full_fov_top
-
-        if self.full_fov_bottom > self.env_width:
-            self.enclosed_fov_bottom = self.env_width
-            self.local_fov_bottom = self.local_dim - (self.full_fov_bottom - self.env_width)
-
-        if self.full_fov_left < 0:
-            self.enclosed_fov_left = 0
-            self.local_fov_left = -self.full_fov_left
-
-        if self.full_fov_right > self.env_height:
-            self.enclosed_fov_right = self.env_height
-            self.local_fov_right = self.local_dim - (self.full_fov_right - self.env_height)
-
-    def get_sliced_masked_image(self, img):
-
-        # apply FOV portion of luminance mask
-        masked_image = np.zeros((self.local_dim, self.local_dim))
-
-        slice = img[self.enclosed_fov_top:self.enclosed_fov_bottom,
-                    self.enclosed_fov_left:self.enclosed_fov_right]
-        
-        masked_image[self.local_fov_top:self.local_fov_bottom,
-                             self.local_fov_left:self.local_fov_right] = slice
-
-
-        return masked_image * self.local_scatter
-
 def ray_sum(array, start_coord, angles_rad, step_size=0.5):
     """
     Fully vectorized version with NO loops - handles duplicate removal vectorized.
@@ -204,3 +122,89 @@ def circle_edge_pixels(image: np.ndarray, center: tuple, radius: int):
     pixels = pixels[angles.argsort()]
     angles = np.sort(angles)
     return pixels, angles
+
+def read_elevation(fish_elevation, masked_pixels, eye_x, eye_y, elevation_angle, fish_angle, pr_angles, rf_size, predator_left, predator_right, predator_dist):
+
+
+    eye_FOV_x = int(eye_x + (masked_pixels.shape[1] - 1) / 2)
+    eye_FOV_y = int(eye_y + (masked_pixels.shape[0] - 1) / 2)
+    radius = int(np.round(fish_elevation * np.tan(np.radians(elevation_angle))))
+    circle_values, circle_angles = circle_edge_pixels(masked_pixels, (eye_FOV_y, eye_FOV_x), radius)
+    if ~np.isnan(predator_dist):
+        if predator_dist < radius:
+            if predator_left > predator_right:
+                circle_values[(circle_angles < predator_left) & (circle_angles > predator_right)] = 0
+            else:
+                circle_values[(circle_angles < predator_left) | (circle_angles > predator_right)] = 0
+    corrected_pr_angles = np.arctan2(np.sin(pr_angles + fish_angle),
+                                                            np.cos(pr_angles + fish_angle))
+    bin_edges1 = corrected_pr_angles - rf_size / 2
+    bin_edges2 = corrected_pr_angles + rf_size / 2
+
+
+    # find closest circle angle to each bin edge
+    l_ind = closest_index_parallel(circle_angles, bin_edges1)
+    r_ind = closest_index_parallel(circle_angles, bin_edges2) + 1
+
+    interleaved_edges = np.vstack((l_ind, r_ind)).T.flatten()
+    bins_sum = np.add.reduceat(circle_values, interleaved_edges)[::2]
+    counts = r_ind - l_ind
+    pr_input = bins_sum / counts
+    return pr_input
+
+def read_prey_proj(max_uv_range, prey_diameter, eye_x, eye_y, uv_pr_angles, fish_angle, rf_size, lum_mask, prey_pos):
+    """Reads the prey projection for the given eye position and fish angle.
+    Same as " but performs more computation in parallel for each prey. Also have removed scatter.
+    """
+    ang_bin = 0.001  # this is the bin size for the projection
+    proj_angles = np.arange(-np.pi, np.pi + ang_bin, ang_bin)  # this is the angle range for the projection
+
+    eye_FOV_x = eye_x + (lum_mask.shape[1] - 1) / 2
+    eye_FOV_y = eye_y + (lum_mask.shape[0] - 1) / 2
+    rel_prey_pos = prey_pos - np.array([eye_FOV_x, eye_FOV_y])
+    rho = np.hypot(rel_prey_pos[:, 0], rel_prey_pos[:, 1])
+
+    within_range = np.where(rho < max_uv_range - 1)[0]
+    prey_pos_in_range = prey_pos[within_range, :]
+    rel_prey_pos = rel_prey_pos[within_range, :]
+    rho = rho[within_range]
+    theta = np.arctan2(rel_prey_pos[:, 1], rel_prey_pos[:, 0]) - fish_angle
+    theta = np.arctan2(np.sin(theta),
+                                                np.cos(theta))  # wrap to [-pi, pi]
+    p_num = prey_pos_in_range.shape[0]
+
+    half_angle = np.arctan(prey_diameter / (2 * rho))
+
+    l_ind = closest_index_parallel(proj_angles, theta - half_angle).astype(int)
+    r_ind = closest_index_parallel(proj_angles, theta + half_angle).astype(int)
+
+    prey_brightness = lum_mask[(np.floor(prey_pos_in_range[:, 1]) - 1).astype(int),
+                                (np.floor(prey_pos_in_range[:, 0]) - 1).astype(
+                                    int)]  # includes absorption (???)
+
+    proj = np.zeros((p_num, len(proj_angles)))
+
+    prey_brightness = np.expand_dims(prey_brightness, 1)
+
+    r = np.arange(proj.shape[1])
+    prey_present = (l_ind[:, None] <= r) & (r_ind[:, None] >= r)
+    prey_present = prey_present.astype(float)
+    prey_present *= prey_brightness
+
+    total_angular_input = np.sum(prey_present, axis=0)
+
+    pr_ind_s = closest_index_parallel(proj_angles, uv_pr_angles - rf_size / 2)
+    pr_ind_e = closest_index_parallel(proj_angles, uv_pr_angles + rf_size / 2)
+
+    pr_occupation = (pr_ind_s[:, None] <= r) & (pr_ind_e[:, None] >= r)
+    pr_occupation = pr_occupation.astype(float)
+    pr_input = pr_occupation * np.expand_dims(total_angular_input, axis=0)
+    pr_input = np.sum(pr_input, axis=1)
+
+    return np.expand_dims(pr_input, axis=1)
+
+def closest_index_parallel(array, value_array):
+    """Find indices of the closest values in array (for each row in axis=0)."""
+    value_array = np.expand_dims(value_array, axis=1)
+    idxs = (np.abs(array - value_array)).argmin(axis=1)
+    return idxs

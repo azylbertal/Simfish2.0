@@ -237,7 +237,7 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
     if show_energy_state:
         energy_levels = data["energy_state"]
     fish_positions = np.array([data['fish_x'], data['fish_y']]).T
-    num_steps = fish_positions.shape[0]
+    num_steps = 100#fish_positions.shape[0]
     metadata = dict(title='Movie Test', artist='Matplotlib',
                 comment='Movie support!')
     writer = FFMpegWriter(fps=15, metadata=metadata)
@@ -372,7 +372,7 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
 
 if __name__ == "__main__":
 
-    data_file = '/home/asaph/cs_cluster/acme/20250724-140225/logs/evaluator/logs_37.hdf5'
+    data_file = '/home/asaph/src/simfish2.0/test_vis_cpp/logs/evaluator/logs_1.hdf5'
 
     draw_episode(data_file, continuous_actions=False, show_energy_state=False,
                  trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=10)

@@ -13,7 +13,8 @@
 # limitations under the License.
 
 import numpy as np
-import geometry
+import geometry_cpp as geometry
+# import geometry
 
 class Eye:
 
@@ -100,18 +101,20 @@ class Eye:
         uv_readings = self.water_uv_scatter * np.expand_dims(geometry.ray_sum(uv_lum_mask, (eye_FOV_y, eye_FOV_x), corrected_uv_pr_angles), axis=1)
         red_readings = np.zeros((self.red_photoreceptor_num, 2))
         for ii, view_elevation in enumerate(self.viewing_elevations):
-            red_readings[:, ii] = self._read_elevation(masked_arena_pixels, eye_x, eye_y, view_elevation, fish_angle,
+            red_readings[:, ii] = geometry.read_elevation(self.fish_elevation, masked_arena_pixels, eye_x, eye_y, view_elevation, fish_angle,
                                  self.red_photoreceptor_angles, self.red_photoreceptor_rf_size, predator_left, predator_right, predator_dist)
 
         uv_items = prey_positions
         if proj and (len(uv_items)) > 0:
-            proj_uv_readings = self._read_prey_proj(eye_x=eye_x,
-                                                    eye_y=eye_y,
-                                                    uv_pr_angles=self.uv_photoreceptor_angles,
-                                                    fish_angle=fish_angle,
-                                                    rf_size=self.uv_photoreceptor_rf_size,
-                                                    lum_mask=uv_lum_mask,
-                                                    prey_pos=np.array(uv_items))
+            proj_uv_readings = geometry.read_prey_proj(max_uv_range=self.max_uv_range,
+                                                       prey_diameter=self.prey_diameter,
+                                                       eye_x=eye_x,
+                                                        eye_y=eye_y,
+                                                        uv_pr_angles=self.uv_photoreceptor_angles,
+                                                        fish_angle=fish_angle,
+                                                        rf_size=self.uv_photoreceptor_rf_size,
+                                                        lum_mask=uv_lum_mask,
+                                                        prey_pos=np.array(uv_items))
             proj_uv_readings *= self.uv_object_intensity
 
             uv_readings += proj_uv_readings
@@ -137,96 +140,6 @@ class Eye:
         photons = photons.clip(0, 255)
 
         return photons
-
-    def _read_elevation(self, masked_pixels, eye_x, eye_y, elevation_angle, fish_angle, pr_angles, rf_size, predator_left, predator_right, predator_dist):
-
-
-        eye_FOV_x = int(eye_x + (masked_pixels.shape[1] - 1) / 2)
-        eye_FOV_y = int(eye_y + (masked_pixels.shape[0] - 1) / 2)
-        radius = int(np.round(self.fish_elevation * np.tan(np.radians(elevation_angle))))
-        circle_values, circle_angles = geometry.circle_edge_pixels(masked_pixels, (eye_FOV_y, eye_FOV_x), radius)
-        if ~np.isnan(predator_dist):
-            if predator_dist < radius:
-                if predator_left > predator_right:
-                    circle_values[(circle_angles < predator_left) & (circle_angles > predator_right)] = 0
-                else:
-                    circle_values[(circle_angles < predator_left) | (circle_angles > predator_right)] = 0
-        corrected_pr_angles = np.arctan2(np.sin(pr_angles + fish_angle),
-                                                                np.cos(pr_angles + fish_angle))
-        bin_edges1 = corrected_pr_angles - rf_size / 2
-        bin_edges2 = corrected_pr_angles + rf_size / 2
-
-
-        # find closest circle angle to each bin edge
-        l_ind = self._closest_index_parallel(circle_angles, bin_edges1)
-        r_ind = self._closest_index_parallel(circle_angles, bin_edges2) + 1
-
-        interleaved_edges = np.vstack((l_ind, r_ind)).T.flatten()
-        bins_sum = np.add.reduceat(circle_values, interleaved_edges)[::2]
-        counts = r_ind - l_ind
-        pr_input = bins_sum / counts
-        return pr_input
-        
-        
-        
-
-    def _read_prey_proj(self, eye_x, eye_y, uv_pr_angles, fish_angle, rf_size, lum_mask, prey_pos):
-        """Reads the prey projection for the given eye position and fish angle.
-        Same as " but performs more computation in parallel for each prey. Also have removed scatter.
-        """
-        ang_bin = 0.001  # this is the bin size for the projection
-        proj_angles = np.arange(-np.pi, np.pi + ang_bin, ang_bin)  # this is the angle range for the projection
-
-        eye_FOV_x = eye_x + (lum_mask.shape[1] - 1) / 2
-        eye_FOV_y = eye_y + (lum_mask.shape[0] - 1) / 2
-        rel_prey_pos = prey_pos - np.array([eye_FOV_x, eye_FOV_y])
-        rho = np.hypot(rel_prey_pos[:, 0], rel_prey_pos[:, 1])
-
-        within_range = np.where(rho < self.max_uv_range - 1)[0]
-        prey_pos_in_range = prey_pos[within_range, :]
-        rel_prey_pos = rel_prey_pos[within_range, :]
-        rho = rho[within_range]
-        theta = np.arctan2(rel_prey_pos[:, 1], rel_prey_pos[:, 0]) - fish_angle
-        theta = np.arctan2(np.sin(theta),
-                                                 np.cos(theta))  # wrap to [-pi, pi]
-        p_num = prey_pos_in_range.shape[0]
-
-        half_angle = np.arctan(self.prey_diameter / (2 * rho))
-
-        l_ind = self._closest_index_parallel(proj_angles, theta - half_angle).astype(int)
-        r_ind = self._closest_index_parallel(proj_angles, theta + half_angle).astype(int)
-
-        prey_brightness = lum_mask[(np.floor(prey_pos_in_range[:, 1]) - 1).astype(int),
-                                   (np.floor(prey_pos_in_range[:, 0]) - 1).astype(
-                                       int)]  # includes absorption (???)
-
-        proj = np.zeros((p_num, len(proj_angles)))
-
-        prey_brightness = np.expand_dims(prey_brightness, 1)
-
-        r = np.arange(proj.shape[1])
-        prey_present = (l_ind[:, None] <= r) & (r_ind[:, None] >= r)
-        prey_present = prey_present.astype(float)
-        prey_present *= prey_brightness
-
-        total_angular_input = np.sum(prey_present, axis=0)
-
-        pr_ind_s = self._closest_index_parallel(proj_angles, uv_pr_angles - rf_size / 2)
-        pr_ind_e = self._closest_index_parallel(proj_angles, uv_pr_angles + rf_size / 2)
-
-        pr_occupation = (pr_ind_s[:, None] <= r) & (pr_ind_e[:, None] >= r)
-        pr_occupation = pr_occupation.astype(float)
-        pr_input = pr_occupation * np.expand_dims(total_angular_input, axis=0)
-        pr_input = np.sum(pr_input, axis=1)
-
-        return np.expand_dims(pr_input, axis=1)
-
-    def _closest_index_parallel(self, array, value_array):
-        """Find indices of the closest values in array (for each row in axis=0)."""
-        value_array = np.expand_dims(value_array, axis=1)
-        idxs = (np.abs(array - value_array)).argmin(axis=1)
-        return idxs
-
 
     def add_noise_to_readings(self, readings):
         """Samples from Poisson distribution to get number of photons"""

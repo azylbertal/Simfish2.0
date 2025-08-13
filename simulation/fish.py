@@ -202,7 +202,7 @@ class Fish:
         
         energy_change = energy_gain - energy_use
 
-        reward = energy_change * self.action_energy_reward_scaling
+        reward = -energy_use * self.action_energy_reward_scaling
         self.energy_level += energy_change
 
         self.energy_level = min(self.energy_level, 1.0)  # Ensure energy level does not exceed 1.0

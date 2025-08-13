@@ -21,7 +21,6 @@ import time
 from simulation.arena import Arena
 from simulation.fish import Fish
 from acme.wrappers import observation_action_reward
-
 OAR = observation_action_reward.OAR
 
 
