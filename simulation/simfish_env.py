@@ -597,51 +597,51 @@ class BaseEnvironment(dm_env.Environment):
 
     def touch_prey(self, arbiter, space, data):
         valid_capture = False
+        for i, shp in enumerate(self.prey_shapes):
+            if shp == arbiter.shapes[0]:
+                touched_prey_index = i
+                break
+                
         if self.fish.capture_possible:
-            for i, shp in enumerate(self.prey_shapes):
-                if shp == arbiter.shapes[0]:
-                    # Check if angles line up.
-                    prey_position = self.prey_bodies[i].position
-                    fish_position = self.fish.body.position
-                    vector = prey_position - fish_position  # Taking fish as origin
+            # Check if angles line up.
+            prey_position = self.prey_bodies[touched_prey_index].position
+            fish_position = self.fish.body.position
+            vector = prey_position - fish_position  # Taking fish as origin
 
-                    # Will generate values between -pi/2 and pi/2 which require adjustment depending on quadrant.
-                    angle = np.arctan(vector[1] / vector[0])
+            # Will generate values between -pi/2 and pi/2 which require adjustment depending on quadrant.
+            angle = np.arctan(vector[1] / vector[0])
 
-                    if vector[0] < 0 and vector[1] < 0:
-                        # Generates postiive angle from left x axis clockwise.
-                        angle += np.pi
-                    elif vector[1] < 0:
-                        # Generates negative angle from right x axis anticlockwise.
-                        angle = angle + (np.pi * 2)
-                    elif vector[0] < 0:
-                        # Generates negative angle from left x axis anticlockwise.
-                        angle = angle + np.pi
+            if vector[0] < 0 and vector[1] < 0:
+                # Generates postiive angle from left x axis clockwise.
+                angle += np.pi
+            elif vector[1] < 0:
+                # Generates negative angle from right x axis anticlockwise.
+                angle = angle + (np.pi * 2)
+            elif vector[0] < 0:
+                # Generates negative angle from left x axis anticlockwise.
+                angle = angle + np.pi
 
-                    # Angle ends up being between 0 and 2pi as clockwise from right x axis. Same frame as fish angle:
-                    fish_orientation = (self.fish.body.angle % (2 * np.pi))
+            # Angle ends up being between 0 and 2pi as clockwise from right x axis. Same frame as fish angle:
+            fish_orientation = (self.fish.body.angle % (2 * np.pi))
 
-                    # Normalise so both in same reference frame
-                    deviation = abs(fish_orientation - angle)
-                    if deviation > np.pi:
-                        # Need to account for cases where one angle is very high, while other is very low, as these
-                        # angles can be close together. Can do this by summing angles and subtracting from 2 pi.
-                        deviation -= (2 * np.pi)
-                        deviation = abs(deviation)
-                    if deviation < self.env_variables["capture_angle_deviation_allowance"]:
-                        valid_capture = True
-                        self.remove_prey(i)
-                    else:
-                        self.failed_capture_attempts += 1
+            # Normalise so both in same reference frame
+            deviation = abs(fish_orientation - angle)
+            if deviation > np.pi:
+                # Need to account for cases where one angle is very high, while other is very low, as these
+                # angles can be close together. Can do this by summing angles and subtracting from 2 pi.
+                deviation -= (2 * np.pi)
+                deviation = abs(deviation)
+            if deviation < self.env_variables["capture_angle_deviation_allowance"]:
+                valid_capture = True
+                self.remove_prey(touched_prey_index)
 
-            if valid_capture:
-                self.prey_caught += 1
-                self.fish.prey_consumed = True
-                self.prey_consumed_this_step = True
-
+        if valid_capture:
+            self.prey_caught += 1
+            self.fish.prey_consumed = True
+            self.prey_consumed_this_step = True
             return False
         else:
-            self.failed_capture_attempts += 1
+            self.prey_bodies[touched_prey_index].apply_impulse_at_local_point((self.env_variables["jump_impulse_paramecia"], 0))
             return True
 
     def remove_prey(self, prey_index):
