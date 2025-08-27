@@ -5,7 +5,7 @@
     "drag": 0.7,
     "phys_dt": 0.2,
     "phys_steps_per_sim_step": 100,
-    "prey_fluid_displacement_scaling_factor": 0.5,
+    "prey_fluid_displacement_scaling_factor": 0.0,
     "dark_light_ratio": 0.3,
     "light_gradient": 20,
     "background_brightness": 0.0005160691302647359,

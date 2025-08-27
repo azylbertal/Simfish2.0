@@ -236,10 +236,10 @@ class BaseEnvironment(dm_env.Environment):
         # 6: Fish body
         # 7: Prey cloud wall
 
-        self.col = self.space.add_collision_handler(2, 3)
-        self.col.begin = self.prey_touch_mouth
-        self.col = self.space.add_collision_handler(2, 6)
-        self.col.begin = self.prey_touch_body
+        self.prey_col = self.space.add_collision_handler(2, 3)
+        self.prey_col.begin = self.prey_touch_mouth
+        self.prey_col2 = self.space.add_collision_handler(2, 6)
+        self.prey_col2.begin = self.prey_touch_body
 
 
         self.pred_col = self.space.add_collision_handler(5, 3)
@@ -550,10 +550,7 @@ class BaseEnvironment(dm_env.Environment):
         impulse_types = [0, self.env_variables["slow_impulse_paramecia"], self.env_variables["fast_impulse_paramecia"]]
         impulses = [impulse_types[gait] for gait in self.paramecia_gaits]
         for touched_index in self.touched_prey_indices: # translate these prey to random locations within 10 pixels of current
-            self.prey_bodies[touched_index].position = (
-                self.prey_bodies[touched_index].position[0] + self.rng.integers(-10, 10),
-                self.prey_bodies[touched_index].position[1] + self.rng.integers(-10, 10)
-            )                
+            impulses[touched_index] += self.env_variables["jump_impulse_paramecia"]            
 
         # Do once per step.
         if micro_step == 0:
