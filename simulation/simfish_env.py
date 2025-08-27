@@ -549,8 +549,12 @@ class BaseEnvironment(dm_env.Environment):
         # Generate impulses
         impulse_types = [0, self.env_variables["slow_impulse_paramecia"], self.env_variables["fast_impulse_paramecia"]]
         impulses = [impulse_types[gait] for gait in self.paramecia_gaits]
-        for touched_index in self.touched_prey_indices:
-            impulses[touched_index] += self.env_variables["touch_impulse_paramecia"]
+        for touched_index in self.touched_prey_indices: # translate these prey to random locations within 10 pixels of current
+            self.prey_bodies[touched_index].position = (
+                self.prey_bodies[touched_index].position[0] + self.rng.integers(-10, 10),
+                self.prey_bodies[touched_index].position[1] + self.rng.integers(-10, 10)
+            )                
+
         # Do once per step.
         if micro_step == 0:
             gaits_to_switch = self.rng.random(len(self.prey_shapes)) < self.env_variables["p_switch"]
