@@ -237,7 +237,10 @@ class BaseEnvironment(dm_env.Environment):
         # 7: Prey cloud wall
 
         self.col = self.space.add_collision_handler(2, 3)
-        self.col.begin = self.touch_prey
+        self.col.begin = self.prey_touch_mouth
+        self.col = self.space.add_collision_handler(2, 6)
+        self.col.begin = self.prey_touch_body
+
 
         self.pred_col = self.space.add_collision_handler(5, 3)
         self.pred_col.begin = self.touch_predator
@@ -595,7 +598,7 @@ class BaseEnvironment(dm_env.Environment):
 
 
 
-    def touch_prey(self, arbiter, space, data):
+    def prey_touch_mouth(self, arbiter, space, data):
         valid_capture = False
         for i, shp in enumerate(self.prey_shapes):
             if shp == arbiter.shapes[0]:
@@ -643,7 +646,15 @@ class BaseEnvironment(dm_env.Environment):
         else:
             self.prey_bodies[touched_prey_index].apply_impulse_at_local_point((self.env_variables["jump_impulse_paramecia"], 0))
             return True
-
+    
+    def prey_touch_body(self, arbiter, space, data):
+        for i, shp in enumerate(self.prey_shapes):
+            if shp == arbiter.shapes[0]:
+                touched_prey_index = i
+                break
+        self.prey_bodies[touched_prey_index].apply_impulse_at_local_point((self.env_variables["jump_impulse_paramecia"], 0))
+        return True
+    
     def remove_prey(self, prey_index):
         self.space.remove(self.prey_shapes[prey_index], self.prey_shapes[prey_index].body)
         del self.prey_shapes[prey_index]
