@@ -549,7 +549,7 @@ class BaseEnvironment(dm_env.Environment):
         # Generate impulses
         impulse_types = [0, self.env_variables["slow_impulse_paramecia"], self.env_variables["fast_impulse_paramecia"]]
         impulses = [impulse_types[gait] for gait in self.paramecia_gaits]
-
+        impulses[self.touched_prey_indices] += self.env_variables["jump_impulse_paramecia"]
         # Do once per step.
         if micro_step == 0:
             gaits_to_switch = self.rng.random(len(self.prey_shapes)) < self.env_variables["p_switch"]
@@ -644,7 +644,7 @@ class BaseEnvironment(dm_env.Environment):
             self.prey_consumed_this_step = True
             return False
         else:
-            self.prey_bodies[touched_prey_index].apply_impulse_at_local_point((self.env_variables["jump_impulse_paramecia"], 0))
+            self.touched_prey_indices.append(touched_prey_index)
             return True
     
     def prey_touch_body(self, arbiter, space, data):
@@ -652,7 +652,7 @@ class BaseEnvironment(dm_env.Environment):
             if shp == arbiter.shapes[0]:
                 touched_prey_index = i
                 break
-        self.prey_bodies[touched_prey_index].apply_impulse_at_local_point((self.env_variables["jump_impulse_paramecia"], 0))
+        self.touched_prey_indices.append(touched_prey_index)
         return True
     
     def remove_prey(self, prey_index):
@@ -881,19 +881,20 @@ class BaseEnvironment(dm_env.Environment):
             self.fish.stress += 0.5
 
         self.init_predator()
-
         for micro_step in range(self.env_variables['phys_steps_per_sim_step']):
-            self.move_prey(micro_step)
+            self.touched_prey_indices = []
 
+    
             if self.fish.making_capture and self.capture_start <= micro_step <= self.capture_end:
                 self.fish.capture_possible = True
             else:
                 self.fish.capture_possible = False
 
-            if self.predator_body is not None:
-                self.move_predator()
 
             self.space.step(self.env_variables['phys_dt'])
+            self.move_prey(micro_step)
+            if self.predator_body is not None:
+                self.move_predator()
 
             if self.fish.prey_consumed:
                 if len(self.prey_shapes) == 0:
