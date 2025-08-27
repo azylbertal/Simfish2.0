@@ -67,6 +67,9 @@ flags.DEFINE_integer(
 flags.DEFINE_string(
     'directory', 'my_training',
     'Directory to store training logs and checkpoints.')
+flags.DEFINE_string(
+    'env_config_file', 'stage1_env.json',
+    'Which environment config file to use from env_config directory.')
 flags.DEFINE_integer(
     'seed', 1, 'Random seed to use for the experiment.')
 flags.DEFINE_integer(
@@ -116,7 +119,7 @@ def build_experiment_config(training_parameters: dict) -> experiments.Experiment
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    env_variables = json.load(open('env_config/5_env.json', 'r'))
+    env_variables = json.load(open('env_config/' + training_parameters['env_config_file'], 'r'))
     return BaseEnvironment(env_variables=env_variables, seed=seed, actions=actions.get_all_actions())
 
   # Configure the agent.
@@ -263,6 +266,7 @@ def main(_):
                        'target_update_period': 1200,
                        'variable_update_period': 100,
                        'directory': FLAGS.directory,
+                       'env_config_file': FLAGS.env_config_file
                        }
 
   print(f"Running R2D2 with the following parameters: {training_parameters}")
