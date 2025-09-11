@@ -1,6 +1,5 @@
 import h5py
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.stats import zscore, multivariate_normal
 from scipy import odr
 
@@ -8,7 +7,11 @@ PIXEL_SIZE = 0.058  # mm per pixel, as per the original code
 ALL_BOUT_NAMES = ['SCS', 'LCS', 'BS', 'O-bend', 'J-turn', 'SLC', 'Slow1', 'RT', 'Slow2', 'LLC', 'AS', 'SAT', 'HAT']
 IS_TURN = [False, False, False, True, True, True, False, True, False, True, False, True, True]
 IS_CAPTURE = [True, True, False, False, False, False, False, False, False, False, False, False, False]
-COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#1f77b4', '#ff7f0e', '#2ca02c']
+# get colors from tableau 20
+COLORS = [(31/255, 119/255, 180/255), (255/255, 127/255, 14/255), (44/255, 160/255, 44/255), (214/255, 39/255, 40/255),
+          (148/255, 103/255, 189/255), (140/255, 86/255, 75/255), (227/255, 119/255, 194/255), (127/255, 127/255, 127/255),
+          (188/255, 189/255, 34/255), (23/255, 190/255, 207/255), (174/255, 199/255, 232/255), (255/255, 187/255, 120/255),
+          (152/255, 223/255, 138/255)]
 BOUT_ENERGY = np.array([0.03, np.nan, np.nan, np.nan, 0.04, np.nan, 0.01, 0.15, 0.15, np.nan, 0.025, np.nan, 0.15])
 
      
@@ -70,6 +73,7 @@ class Actions:
         raise ValueError(f"Action {action_name} not found in actions.")
     
     def display_actions(self):
+
         xx, yy = np.mgrid[0:20:.1, -3:3:.01]
         pos = np.dstack((xx, yy))
         plt.figure()
@@ -77,7 +81,7 @@ class Actions:
             rv = multivariate_normal(action['mean'], action['cov'])
             pdf = rv.pdf(pos)
             half_max = np.max(pdf) / 2
-            CS = plt.contour(xx, yy, pdf, levels=[half_max], alpha=0.5, colors=action['color'])
+            CS = plt.contour(xx, yy, pdf, levels=[half_max], alpha=0.5, colors=[action['color']])
             label = f'{id}-{action["name"]}'
             plt.clabel(CS, CS.levels, fmt={CS.levels[0]:label}, fontsize=8, inline_spacing=1)
         plt.xlabel('Distance (mm)')
@@ -87,6 +91,7 @@ class Actions:
         return self.actions
 
     def get_extracted_actions(self, h5_file_path, bouts_to_save=None):
+
         """
         Extracts the actions from the h5 file and returns a list of dictionaries containing the action name, mean, covariance, whether it is a turn, and whether it is a capture.
         """
@@ -101,7 +106,6 @@ class Actions:
             eligble_indices = (~np.isnan(dists[i])) & (~np.isnan(angles[i]))
             eligble_angles = angles[i][eligble_indices]
             eligble_dists = dists[i][eligble_indices]
-            #plt.scatter(eligble_dists, eligble_angles, label=bout_name[i], s=1, alpha=0.1)
 
             if IS_TURN[i]:
                 eligble_angles = np.abs(eligble_angles)
@@ -149,6 +153,11 @@ class Actions:
 
         plt.figure()
         plt.scatter(non_nan_energy, non_nan_preds, color='black', label='Predicted Energy')
+        plt.xlabel('Goodhill Energy')
+        plt.ylabel('Predicted Energy from Linear Regression')
+        plt.plot([0, 0.2], [0, 0.2], color='red', linestyle='--', label='y=x')
+        plt.title('Predicted vs Actual Goodhill Energy')
+        plt.axis('equal')
         print("Linear Regression Coefficients:")
         print(f"Intercept: {reg[0]}")
         print(f"Energy coefficients: {reg[1:]}")
@@ -218,6 +227,8 @@ class Actions:
         return opposing_dict
     
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+
     h5_file_path = "/home/asaph/Downloads/filtered_jmpool_kin.h5"  # Replace with your actual file path
 
     actions = Actions(h5_file_path, bouts_to_save=None)  # Use None to extract all bouts

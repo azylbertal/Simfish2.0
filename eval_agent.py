@@ -176,6 +176,18 @@ def eval_agent(experiment: config.ExperimentConfig, directory: str, num_episodes
       replay_client=replay_client,
       counter=counting.Counter(parent_counter, prefix='learner', time_delta=0.))
 
+  checkpointing = experiment.checkpointing
+
+  checkpointer = savers.Checkpointer(
+        objects_to_save={'learner': learner},
+        time_delta_minutes=checkpointing.time_delta_minutes,
+        directory=checkpointing.directory,
+        add_uid=checkpointing.add_uid,
+        max_to_keep=checkpointing.max_to_keep,
+        subdirectory='learner',
+        keep_checkpoint_every_n_hours=checkpointing.keep_checkpoint_every_n_hours,
+        checkpoint_ttl_seconds=checkpointing.checkpoint_ttl_seconds,
+    )
 
   # Create the evaluation actor and loop.
   eval_counter = counting.Counter(

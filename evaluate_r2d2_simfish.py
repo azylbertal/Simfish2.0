@@ -23,6 +23,7 @@ import dm_env
 import json
 from simulation.simfish_env import BaseEnvironment
 from R2D2Network import make_r2d2_networks
+from define_actions import Actions
 
 
 # Flags which modify the behavior of the launcher.
@@ -33,8 +34,11 @@ flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
 
 FLAGS = flags.FLAGS
 
+actions = Actions()
+actions.from_hdf5('actions_all_bouts.h5')
+actions_mirror = actions.get_opposing_dict()
 
-directory = 'my_training'
+directory = 'stage2_demo_later'
 
 def build_experiment_config():
   """Builds R2D2 experiment config which can be executed in different ways."""
@@ -42,19 +46,19 @@ def build_experiment_config():
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    env_variables = json.load(open('env_config/4_env.json', 'r'))
-    return BaseEnvironment(env_variables=env_variables, seed=seed)
+    env_variables = json.load(open('env_config/stage2_env.json', 'r'))
+    return BaseEnvironment(env_variables=env_variables, seed=seed, actions=actions.get_all_actions())
 
   # Configure the agent.
   config = r2d2.R2D2Config(
       burn_in_length=8,
-      trace_length=40,
+      trace_length=75,
       sequence_period=20,
       min_replay_size=10,#_000,
       batch_size=batch_size,
       prefetch_size=1,
       samples_per_insert=1.0,
-      evaluation_epsilon=1e-3,
+      evaluation_epsilon=0,#1e-3,
       learning_rate=1e-4,
       target_update_period=1200,
       variable_update_period=100,
@@ -82,7 +86,7 @@ def main(_):
 
 
   print('Running single-threaded.')
-  eval_agent(experiment=config, directory=directory, num_episodes=3)
+  eval_agent(experiment=config, directory=directory, num_episodes=50)
 
 
 if __name__ == '__main__':

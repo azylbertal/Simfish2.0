@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import h5py
 import numpy as np
 
-dir = '/home/asaph/cs_cluster/acme/20250714-170106/logs/evaluator'
+dir = '/home/asaph/src/simfish2.0/checkpoints_250819/logs/model_evaluation'
 
 
 # find all files in the directory that start with 'logs_' and end with '.hdf5'
@@ -50,3 +50,8 @@ plt.show()
 
 print(f'mean start distance: {np.mean(start_dist)}')
 print(f'mean end distance: {np.mean(end_dist)}')
+
+from scipy.stats import ttest_rel
+
+t_stat, p_value = ttest_rel(start_dist, end_dist)
+print(f't-statistic: {t_stat}, p-value: {p_value}')

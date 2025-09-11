@@ -92,15 +92,14 @@ def draw_lines_with_opacity(image, x_coords, y_coords, colors, L, thickness=5):
         # Create temporary mask for this line (cv2 requires uint8 for line drawing)
         line_mask = np.zeros(result_image.shape[:2], dtype=np.uint8)
         
-        # Convert color to BGR format and scale to 0-255 for cv2.line
-        bgr_color = (int(colors[i][2] * 255), int(colors[i][1] * 255), int(colors[i][0] * 255))
+
         cv2.line(line_mask, (x1, y1), (x2, y2), 255, thickness)
         
         # Convert to boolean mask
         line_pixels = line_mask > 0
         
         # Update overlay with weighted color
-        bgr_color_float = np.array([colors[i][2], colors[i][1], colors[i][0]], dtype=np.float32)
+        color_float = np.array([colors[i][0], colors[i][1], colors[i][2]], dtype=np.float32)
         
         # For overlapping pixels, use the maximum opacity (newest line wins)
         new_alpha = np.full_like(alpha_mask, opacity)
@@ -108,13 +107,12 @@ def draw_lines_with_opacity(image, x_coords, y_coords, colors, L, thickness=5):
         
         # Update overlay colors where this line should be visible
         for c in range(3):
-            overlay[update_mask, c] = bgr_color_float[c]
+            overlay[update_mask, c] = color_float[c]
         
         # Update alpha mask
         alpha_mask[update_mask] = opacity
     
     # Apply the blending using the alpha mask
-    # result = original * (1 - alpha) + overlay * alpha
     alpha_3d = np.stack([alpha_mask] * 3, axis=-1)
     result_image = result_image * (1 - alpha_3d) + overlay * alpha_3d
     
@@ -307,10 +305,11 @@ class DrawingBoard:
 
     def get_action_colour(self, action):
         """Returns the (R, G, B) for associated actions"""
-        hex_col = actions[action]['color']
-        hex_col = hex_col.lstrip('#')
-        rgb = tuple(int(hex_col[i:i+2], 16)/255 for i in (0, 2, 4))
-        return rgb 
+        return actions[action]['color']
+        # hex_col = actions[action]['color']
+        # hex_col = hex_col.lstrip('#')
+        # rgb = tuple(int(hex_col[i:i+2], 16)/255 for i in (0, 2, 4))
+        # return rgb 
 
     def apply_light(self):
         dark_field_length = int(self.height * self.dark_light_ratio)
@@ -398,21 +397,37 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
         with_states = False
     print(f"Used RNN dimensions: {rnn_states.shape[1]}")
     rnn_states_PCA = PCA(n_components=3).fit_transform(rnn_states)
-    fig = plt.figure(facecolor='0.1', figsize=(15, 12.69), dpi=100)
+    fig = plt.figure(facecolor='0.0', figsize=(15, 12.69), dpi=100)
     gs = fig.add_gridspec(nrows=11, ncols=13, left=0.05, right=0.85,
                       hspace=0.1, wspace=0.1)
     ax0 = fig.add_subplot(gs[0:10, 0:10])
     
-    ax1 = fig.add_subplot(gs[10, 0:5])
-    ax2 = fig.add_subplot(gs[10, 5:10])
+    ax1 = fig.add_subplot(gs[10, 0:4])
+    ax2 = fig.add_subplot(gs[10, 6:10])
     # ax3 = fig.add_subplot(gs[0, 6:])
-    ax3 = fig.add_subplot(gs[0:3, 10:13], projection='3d') # pca in 3d
+    ax3 = fig.add_subplot(gs[5:8, 10:13], projection='3d') # pca in 3d
     ax3.set_facecolor((0,0,0))
-    ax4 = fig.add_subplot(gs[5:8, 10:13])
+    ax4 = fig.add_subplot(gs[10, 10:13])
     ax4.set_facecolor((0,0,0))
-    # ax5 = fig.add_subplot(gs[8:11, 10:13])
-    # ax5.set_facecolor((0,0,0))
-
+    ax5 = fig.add_subplot(gs[0:4, 10:12])
+    ax5.set_facecolor((0,0,0))
+    # draw short lines representing all actions (in appropriate color), with action names as text labels
+    hh = 0
+    for i in range(len(actions)):
+        if not '_L' in actions[i]['name']:
+            
+            ax5.plot([0, 1], [hh, hh], color=actions[i]['color'], linewidth=3)
+            action_name = actions[i]['name'].split('_')[0]
+            ax5.text(1.2, hh-0.1, action_name, fontsize=12, color=actions[i]['color'])
+            hh += 1
+    # remove all ticks and spines
+    ax5.set_xticks([])
+    ax5.set_yticks([])
+    for spine in ax5.spines.values():
+        spine.set_visible(False)
+    ax5.set_ylim(-1, hh+1)
+    ax5.set_xlim(0, 5)
+    
         # ax6 = fig.add_subplot(gs[3, 6:])
     # ax7 = fig.add_subplot(gs[4, 6:])
     #annotate_axes(ax1, 'ax1')
@@ -452,28 +467,26 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
             else:
                 fish_body_colour = (0, 1, 0)
 
-            board.fish_shape(fish_positions[step], env_variables['fish_mouth_radius'],
-                                env_variables['fish_head_radius'], env_variables['fish_tail_length'],
-                            (0, 1, 0), fish_body_colour, data["fish_angle"][step])
 
             # Draw prey
-            # px = np.round(np.array([pr[0] for pr in data["prey_positions"][step]])).astype(int)
-            # py = np.round(np.array([pr[1] for pr in data["prey_positions"][step]])).astype(int)
             px = np.round(data['prey_x'][step, :]).astype(int)
             py = np.round(data['prey_y'][step, :]).astype(int)
             nan_prey = np.isnan(px)
             px = px[~nan_prey]
             py = py[~nan_prey]
-            rrs, ccs = board.multi_circles(px, py, 10)#env_variables["prey_size_visualisation"])
+            rrs, ccs = board.multi_circles(px, py, 7)#env_variables["prey_size_visualisation"])
 
             rrs = np.clip(rrs, 0, env_variables["arena_width"]-1)
             ccs = np.clip(ccs, 0, env_variables["arena_height"]-1)
 
-            board.db[rrs, ccs] = (1, 0.3, 0.3)
+            board.db[rrs, ccs] = (1, 0.3, 1.0)
             board.apply_light()
             if draw_past_actions:
                 board, action_buffer, position_buffer = draw_previous_actions(board, action_buffer,
                                                                                                 position_buffer, n_actions_to_show=n_actions_to_show)
+            board.fish_shape(fish_positions[step], env_variables['fish_mouth_radius']*2,
+                                env_variables['fish_head_radius']*2, env_variables['fish_tail_length']*2,
+                            (0.8, 0.8, 1), (0.7,0.7,1), data["fish_angle"][step])
 
             if data["predator_x"][step]!=0 and data["predator_y"][step]!=0:
                 predator_position = (data["predator_x"][step], data["predator_y"][step])
@@ -528,7 +541,7 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
             ax2.tick_params(left = False, right = False , labelleft = False ,
                     labelbottom = False, bottom = False)
 
-            plot_start = max(0, step - 100)
+            plot_start = max(0, step - 200)
             # ax4.clear()
             # ax4.plot(rnn_states_PCA[plot_start:step, :], linewidth=0.5)
             # ax4.tick_params(left = False, right = False , labelleft = False ,
@@ -552,41 +565,16 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
             ax4.set_ylim((0,1.1))
             ax4.tick_params(left = False, right = False , labelleft = False ,
                     labelbottom = False, bottom = False)
-            # ax5.clear()
-            # ax5.set_ylim((0,1))
-            # ax5.tick_params(left = False, right = False , labelleft = False ,
-            #         labelbottom = False, bottom = False)
-
-            # plot_start = max(0, step - 100)
-            # ax3.clear()
-            # ax3.plot(energy_levels[plot_start:step], color='green')
-            # ax3.tick_params(left = False, right = False , labelleft = False ,
-            #         labelbottom = False, bottom = False)
-            # ax4.clear()
-            # ax4.plot(data['rnn_state_actor'][plot_start:step, 0, :10])
-            # ax4.tick_params(left = False, right = False , labelleft = False ,
-            #         labelbottom = False, bottom = False)
-            # ax5.clear()
-            # ax5.plot(data['rnn_state_actor'][plot_start:step, 0, 10:20])
-            # ax5.tick_params(left = False, right = False , labelleft = False ,
-            #         labelbottom = False, bottom = False)
-            # ax6.clear()
-            # ax6.plot(data['rnn_state_actor'][plot_start:step, 0, 20:30])
-            # ax6.tick_params(left = False, right = False , labelleft = False ,
-            #         labelbottom = False, bottom = False)
-            # ax7.clear()
-            # ax7.plot(data['rnn_state_actor'][plot_start:step, 0, 30:40])
-            # ax7.tick_params(left=False, right=False , labelleft=False, labelbottom=False, bottom=False)
             writer.grab_frame()
     writer.finish()
 
 
 if __name__ == "__main__":
 
-    # data_file = '/home/asaph/src/simfish2.0/checkpoints_250819/logs/model_evaluation/logs_1.hdf5'
-    data_file = '/home/asaph/Downloads/logs_48.hdf5'
+    data_file = '/home/asaph/src/simfish2.0/stage2_demo_later/logs/model_evaluation/logs_30.hdf5'
+    # data_file = '/home/asaph/cs_cluster/Simfish2.0/test_stage1/logs/evaluator/logs_70.hdf5'
     num_steps = int(sys.argv[1]) if len(sys.argv)>1 else 1000
-    draw_episode(data_file, continuous_actions=False, show_energy_state=False, draw_past_actions=False,
+    draw_episode(data_file, continuous_actions=False, show_energy_state=False, draw_past_actions=True,
                  trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=25, num_steps=num_steps)
 
 
