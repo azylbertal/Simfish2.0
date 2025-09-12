@@ -22,29 +22,28 @@ class Eye:
 
         self.test_mode = env_variables["test_sensory_system"]
         self.rng = rng
-        self.viewing_elevations = env_variables["viewing_elevations"]
-        self.fish_elevation = env_variables["elevation"]
-        self.uv_object_intensity = env_variables["uv_object_intensity"]
-        self.water_uv_scatter = env_variables["water_uv_scatter"]
+        self.viewing_elevations = env_variables["eyes_viewing_elevations"]
+        self.fish_elevation = env_variables["fish_elevation"]
+        self.uv_object_intensity = env_variables["arena_uv_object_intensity"]
+        self.water_uv_scatter = env_variables["arena_water_uv_scatter"]
         self.retinal_field_size = retinal_field
         self.env_variables = env_variables
         self.max_uv_range = max_uv_range
         self.prey_diameter = self.env_variables['prey_radius'] * 2
 
-        self.sz_rf_spacing = self.env_variables["sz_rf_spacing"]
-        self.sz_size = self.env_variables["sz_size"]
-        self.sz_oversampling_factor = self.env_variables["sz_oversampling_factor"]
-        self.sigmoid_steepness = self.env_variables["sigmoid_steepness"]
+        self.sz_rf_spacing = self.env_variables["eyes_sz_rf_spacing"]
+        self.sz_size = self.env_variables["eyes_sz_size"]
+        self.sz_oversampling_factor = self.env_variables["eyes_sz_oversampling_factor"]
+        self.sigmoid_steepness = self.env_variables["eyes_sz_edge_steepness"]
 
         self.periphery_rf_spacing = self.sz_rf_spacing * self.sz_oversampling_factor
         self.density_range = self.periphery_rf_spacing - self.sz_rf_spacing
 
-        self.uv_photoreceptor_rf_size = env_variables['uv_photoreceptor_rf_size']
-        self.red_photoreceptor_rf_size = env_variables['red_photoreceptor_rf_size']
+        self.uv_photoreceptor_rf_size = env_variables['eyes_uv_photoreceptor_rf_size']
+        self.red_photoreceptor_rf_size = env_variables['eyes_red_photoreceptor_rf_size']
 
         self.uv_photoreceptor_angles = self.update_angles_sigmoid(verg_angle, retinal_field, is_left)
-        self.uv_photoreceptor_num = len(self.uv_photoreceptor_angles)
-        self.red_photoreceptor_num = self.uv_photoreceptor_num
+        self.channel_photoreceptor_num = len(self.uv_photoreceptor_angles)
 
         self.interpolated_observation_angles = np.arange(
             np.min(self.uv_photoreceptor_angles),
@@ -52,9 +51,8 @@ class Eye:
             self.sz_rf_spacing / 2)
 
         self.red_photoreceptor_angles = self.update_angles(verg_angle, retinal_field, is_left,
-                                                           self.red_photoreceptor_num)
+                                                           self.channel_photoreceptor_num)
 
-        self.total_photoreceptor_num = self.uv_photoreceptor_num + self.red_photoreceptor_num
 
     def update_angles_sigmoid(self, verg_angle, retinal_field, is_left):
         """Set the eyes visual angles to be a sigmoidal distribution."""
@@ -99,7 +97,7 @@ class Eye:
         eye_FOV_y = eye_y + (uv_lum_mask.shape[0] - 1) / 2
 
         uv_readings = self.water_uv_scatter * np.expand_dims(geometry.ray_sum(uv_lum_mask, (eye_FOV_y, eye_FOV_x), corrected_uv_pr_angles), axis=1)
-        red_readings = np.zeros((self.red_photoreceptor_num, 2))
+        red_readings = np.zeros((self.channel_photoreceptor_num, 2))
         for ii, view_elevation in enumerate(self.viewing_elevations):
             red_readings[:, ii] = geometry.read_elevation(self.fish_elevation, masked_arena_pixels, eye_x, eye_y, view_elevation, fish_angle,
                                  self.red_photoreceptor_angles, self.red_photoreceptor_rf_size, predator_left, predator_right, predator_dist)
@@ -143,7 +141,7 @@ class Eye:
 
     def add_noise_to_readings(self, readings):
         """Samples from Poisson distribution to get number of photons"""
-        if self.env_variables["shot_noise"]:
+        if self.env_variables["eyes_shot_noise"]:
             photons = self.rng.poisson(readings)
         else:
             photons = readings

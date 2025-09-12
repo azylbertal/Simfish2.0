@@ -35,14 +35,14 @@ class BaseEnvironment(dm_env.Environment):
         self.actions = actions
         self.num_actions = len(actions)
         
-        self.max_uv_range = np.absolute(np.log(0.001) / self.env_variables["light_decay_rate"])
+        self.max_uv_range = np.absolute(np.log(0.001) / self.env_variables["arena_light_decay_rate"])
 
         self.arena = Arena(self.env_variables, rng=self.rng)
-        self.dark_row = int(self.env_variables['arena_height'] * self.env_variables['dark_light_ratio'])
+        self.dark_row = int(self.env_variables['arena_height'] * self.env_variables['arena_dark_fraction'])
 
         self.space = pymunk.Space()
         self.space.gravity = pymunk.Vec2d(0.0, 0.0)
-        self.space.damping = self.env_variables['drag']
+        self.space.damping = self.env_variables['phys_drag']
 
         self.fish = Fish(env_variables=env_variables, max_uv_range=self.max_uv_range, rng=self.rng, actions=actions)       
 
@@ -52,17 +52,11 @@ class BaseEnvironment(dm_env.Environment):
                 self.env_variables['arena_height'])
         self.salt_location = None
 
-
-        # For currents (new simulation):
-        self.impulse_vector_field = None
-        self.coordinates_in_current = None  # May be used to provide efficient checking. Although vector comp probably faster.
-        #self.create_current()
         self.capture_fraction = int(
-            self.env_variables["phys_steps_per_sim_step"] * self.env_variables['fraction_capture_permitted'])
+            self.env_variables["phys_steps_per_sim_step"] * self.env_variables['capture_swim_permisive_time_fraction'])
         self.capture_start = 1  # int((self.env_variables['phys_steps_per_sim_step'] - self.capture_fraction) / 2)
         self.capture_end = self.capture_start + self.capture_fraction
 
-        #self.paramecia_distances = []
 
         self.space.add(self.fish.body, self.fish.mouth, self.fish.head, self.fish.tail)
         self.prey_shapes = []
@@ -73,7 +67,7 @@ class BaseEnvironment(dm_env.Environment):
         self.salt_associated_reward = 0
         self.predator_associated_reward = 0
         self.wall_associated_reward = 0
-        self._prey_escape_p_per_physics_step = 1 - (1-self.env_variables["p_escape"])**(1/self.env_variables["phys_steps_per_sim_step"])
+        self._prey_escape_p_per_physics_step = 1 - (1-self.env_variables["prey_p_escape"])**(1/self.env_variables["phys_steps_per_sim_step"])
 
         self.create_walls()
 
@@ -89,7 +83,6 @@ class BaseEnvironment(dm_env.Environment):
         self._reset_next_step = False
         self.tested_predator = False
         self.num_steps = 0
-        self.fish.stress = 1
         self.fish.touched_edge_this_step = False
         self.prey_caught = 0
         self.predator_attacks_avoided = 0
@@ -127,11 +120,9 @@ class BaseEnvironment(dm_env.Environment):
             self.fish.body.angle = self.rng.random() * 2 * np.pi
 
         self.fish.body.velocity = (0, 0)
-        if self.env_variables["current_setting"]:
-            self.impulse_vector_field *= self.rng.choice([-1, 1]).astype(float)
         self.fish.capture_possible = False
 
-        if self.env_variables["differential_prey"]:
+        if self.env_variables["prey_cloud_num"] > 0:
             self.prey_cloud_locations = [
                 [self.rng.integers(
                     low=120 + self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius'],
@@ -144,23 +135,6 @@ class BaseEnvironment(dm_env.Environment):
                              self.env_variables['prey_radius'] + self.env_variables[
                          'fish_mouth_radius']) - 120)]
                 for cloud in range(int(self.env_variables["prey_cloud_num"]))]
-
-            if "fixed_prey_distribution" in self.env_variables:
-                if self.env_variables["fixed_prey_distribution"]:
-                    x_locations = np.linspace(
-                        120 + self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius'],
-                        self.env_variables['arena_width'] - (
-                                self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius']) - 120,
-                        np.ceil(self.env_variables["prey_cloud_num"] ** 0.5))
-                    y_locations = np.linspace(
-                        120 + self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius'],
-                        self.env_variables['arena_width'] - (
-                                self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius']) - 120,
-                        np.ceil(self.env_variables["prey_cloud_num"] ** 0.5))
-
-                    self.prey_cloud_locations = np.concatenate((np.expand_dims(x_locations, 1),
-                                                                np.expand_dims(y_locations, 1)), axis=1)
-                    self.prey_cloud_locations = self.prey_cloud_locations[:self.env_variables["prey_cloud_num"]]
 
             if not self.env_variables["prey_reproduction_mode"]:
                 self.build_prey_cloud_walls()
@@ -180,7 +154,6 @@ class BaseEnvironment(dm_env.Environment):
             for i in range(int(self.env_variables['prey_num'])):
                 self.create_prey()
 
-        self.impulse_against_fish_previous_step = None
         self.recent_cause_of_death = None
         self.available_prey = self.env_variables["prey_num"]
         self.vector_agreement = []
@@ -195,10 +168,10 @@ class BaseEnvironment(dm_env.Environment):
         self.event_survived_predator = False
 
         self.survived_attack = False
-        self.predator_prob = np.zeros(self.env_variables['max_epLength'])
+        self.predator_prob = np.zeros(self.env_variables['max_episode_length'])
 
         predator_epoch_starts = self.rng.integers(
-            low=self.env_variables['immunity_steps'], high=self.env_variables['max_epLength'] - self.env_variables['predator_epoch_duration'],
+            low=self.env_variables['predator_immunity_steps'], high=self.env_variables['max_episode_length'] - self.env_variables['predator_epoch_duration'],
             size=self.env_variables['predator_epoch_num'])
         for i in predator_epoch_starts:
             self.predator_prob[i:i + self.env_variables['predator_epoch_duration']] = self.env_variables['predator_probability_per_epoch_step']
@@ -287,7 +260,7 @@ class BaseEnvironment(dm_env.Environment):
 
     def reproduce_prey(self):
         num_prey = len(self.prey_bodies)
-        p_prey_birth = self.env_variables["birth_rate"] * (self.env_variables["prey_num"] - num_prey)
+        p_prey_birth = self.env_variables["prey_birth_rate"] * (self.env_variables["prey_num"] - num_prey)
         for cloud in self.prey_cloud_locations:
             if self.rng.random(1) < p_prey_birth:
                 if not self.check_proximity(cloud, self.env_variables["prey_cloud_region_size"]):
@@ -367,7 +340,7 @@ class BaseEnvironment(dm_env.Environment):
         return False
 
     def touch_wall(self, arbiter, space, data):
-        if not self.env_variables["wall_reflection"]:
+        if not self.env_variables["arena_wall_bounce"]:
             return self._touch_wall(arbiter, space, data)
         else:
             return self._touch_wall_reflect(arbiter, space, data)
@@ -438,7 +411,7 @@ class BaseEnvironment(dm_env.Environment):
         self.prey_shapes[-1].elasticity = 1.0
         self.prey_bodies[-1].angle = self.rng.uniform(0, np.pi * 2)
         if prey_position is None:
-            if not self.env_variables["differential_prey"]:
+            if self.env_variables["prey_cloud_num"] == 0:
                 self.prey_bodies[-1].position = (
                     self.rng.integers(
                         self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius'] + 40,
@@ -468,9 +441,9 @@ class BaseEnvironment(dm_env.Environment):
             self.prey_identifiers.append(self.total_prey_created)
             self.total_prey_created += 1
             self.paramecia_gaits.append(
-                self.rng.choice([0, 1, 2], 1, p=[1 - (self.env_variables["p_fast"] + self.env_variables["p_slow"]),
-                                                  self.env_variables["p_slow"],
-                                                  self.env_variables["p_fast"]])[0])
+                self.rng.choice([0, 1, 2], 1, p=[1 - (self.env_variables["prey_p_fast"] + self.env_variables["prey_p_slow"]),
+                                                  self.env_variables["prey_p_slow"],
+                                                  self.env_variables["prey_p_fast"]])[0])
             if self.env_variables["prey_reproduction_mode"]:
                 self.prey_ages.append(0)
         else:
@@ -547,17 +520,17 @@ class BaseEnvironment(dm_env.Environment):
             return
 
         # Generate impulses
-        impulse_types = [0, self.env_variables["slow_impulse_paramecia"], self.env_variables["fast_impulse_paramecia"]]
+        impulse_types = [0, self.env_variables["prey_impulse_slow"], self.env_variables["prey_impulse_fast"]]
         impulses = [impulse_types[gait] for gait in self.paramecia_gaits]
         for touched_index in self.touched_prey_indices: # translate these prey to random locations within 10 pixels of current
-            impulses[touched_index] += self.env_variables["jump_impulse_paramecia"]            
+            impulses[touched_index] += self.env_variables["prey_impulse_jump"]            
 
         # Do once per step.
         if micro_step == 0:
-            gaits_to_switch = self.rng.random(len(self.prey_shapes)) < self.env_variables["p_switch"]
+            gaits_to_switch = self.rng.random(len(self.prey_shapes)) < self.env_variables["prey_p_switch"]
             switch_to = self.rng.choice([0, 1, 2], len(self.prey_shapes),
-                                         p=[1 - (self.env_variables["p_slow"] + self.env_variables["p_fast"]),
-                                            self.env_variables["p_slow"], self.env_variables["p_fast"]])
+                                         p=[1 - (self.env_variables["prey_p_slow"] + self.env_variables["prey_p_fast"]),
+                                            self.env_variables["prey_p_slow"], self.env_variables["prey_p_fast"]])
             self.paramecia_gaits = [switch_to[i] if gaits_to_switch[i] else old_gait for i, old_gait in
                                     enumerate(self.paramecia_gaits)]
 
@@ -568,7 +541,7 @@ class BaseEnvironment(dm_env.Environment):
 
             # Large angle changes
             large_turns = self.rng.uniform(-np.pi, np.pi, len(self.prey_shapes))
-            large_turns_implemented = self.rng.random(len(self.prey_shapes)) < self.env_variables["p_large_turn"]
+            large_turns_implemented = self.rng.random(len(self.prey_shapes)) < self.env_variables["prey_p_large_turn"]
             angle_changes = angle_changes + (large_turns * large_turns_implemented)
 
             self.prey_within_range = self.check_proximity_all_prey(self.env_variables["prey_sensing_distance"])
@@ -579,24 +552,9 @@ class BaseEnvironment(dm_env.Environment):
             prey_body.apply_impulse_at_local_point((impulses[i], 0))
 
             if self.prey_within_range[i]:
-                # Motion from fluid dynamics
-                if self.env_variables["prey_fluid_displacement_scaling_factor"] > 0:
-                    distance_vector = prey_body.position - self.fish.body.position
-                    distance = (distance_vector[0] ** 2 + distance_vector[1] ** 2) ** 0.5
-                    if distance<5:  # Prevent division by zero.
-                        distance = 5
-
-                    distance_scaling = 1/(distance**2)#np.exp(-distance)
-
-                    original_angle = prey_body.angle
-                    prey_body.angle = self.fish.body.angle + self.rng.uniform(-1, 1) # overall away from fish
-                    impulse_for_prey = self.fish.prev_action_impulse * self.env_variables["prey_fluid_displacement_scaling_factor"] * distance_scaling
-                    prey_body.apply_impulse_at_local_point((impulse_for_prey, 0))
-                    prey_body.angle = original_angle
-
                 # Motion from prey escape
                 if self.rng.random() < self._prey_escape_p_per_physics_step:
-                    prey_body.apply_impulse_at_local_point((self.env_variables["jump_impulse_paramecia"], 0))
+                    prey_body.apply_impulse_at_local_point((self.env_variables["prey_impulse_jump"], 0))
 
 
 
@@ -636,7 +594,7 @@ class BaseEnvironment(dm_env.Environment):
                 # angles can be close together. Can do this by summing angles and subtracting from 2 pi.
                 deviation -= (2 * np.pi)
                 deviation = abs(deviation)
-            if deviation < self.env_variables["capture_angle_deviation_allowance"]:
+            if deviation < self.env_variables["capture_swim_permissive_angle"]:
                 valid_capture = True
                 self.remove_prey(touched_prey_index)
 
@@ -677,7 +635,7 @@ class BaseEnvironment(dm_env.Environment):
     def touch_predator(self, arbiter, space, data):
         if self.env_variables["test_sensory_system"]:
             self.remove_predator()
-        if self.num_steps > self.env_variables['immunity_steps']:
+        if self.num_steps > self.env_variables['predator_immunity_steps']:
             self.fish.touched_predator = True
             return False
         else:
@@ -872,15 +830,7 @@ class BaseEnvironment(dm_env.Environment):
         reward = 0
         self.fish.take_action(action)
 
-        # For impulse direction logging (current opposition metric)
-        self.fish.impulse_vector_x = self.fish.prev_action_impulse * np.sin(self.fish.body.angle)
-        self.fish.impulse_vector_y = self.fish.prev_action_impulse * np.cos(self.fish.body.angle)
         done = False
-
-        # Change internal state variables
-        self.fish.stress = self.fish.stress * self.env_variables['stress_compound']
-        if self.predator_body is not None:
-            self.fish.stress += 0.5
 
         self.init_predator()
         for micro_step in range(self.env_variables['phys_steps_per_sim_step']):
@@ -909,64 +859,63 @@ class BaseEnvironment(dm_env.Environment):
 
         if self.fish.touched_predator:
             self.event_captured_by_predator = True
-            reward -= self.env_variables['predator_cost']
+            reward += self.env_variables['reward_predator_caught']
             self.survived_attack = False
-            self.predator_associated_reward -= self.env_variables["predator_cost"]
+            self.predator_associated_reward += self.env_variables["reward_predator_caught"]
             self.total_attacks_captured += 1
             self.remove_predator()
             self.fish.touched_predator = False
 
         if (self.predator_body is None) and self.survived_attack:
             self.event_survived_predator = True
-            reward += self.env_variables["predator_avoidance_reward"]
-            self.predator_associated_reward += self.env_variables["predator_cost"]
+            reward += self.env_variables["reward_predator_avoidance"]
+            self.predator_associated_reward += self.env_variables["reward_predator_avoidance"]
             self.total_attacks_avoided += 1
             self.survived_attack = False
 
         self.bring_fish_in_bounds()
 
         # Energy level
-        if self.env_variables["energy_state"]:
-            energy_reward = self.fish.update_energy_level(self.prey_consumed_this_step)
-            reward += energy_reward
-            if self.prey_consumed_this_step:
-                reward += self.env_variables["consumption_bonus_reward"]
-                self.consumption_associated_reward += self.env_variables["consumption_bonus_reward"]
-            self.energy_associated_reward += energy_reward
+        energy_reward = self.fish.update_energy_level(self.prey_consumed_this_step)
+        reward += energy_reward
+        if self.prey_consumed_this_step:
+            reward += self.env_variables["reward_consumption"]
+            self.consumption_associated_reward += self.env_variables["reward_consumption"]
+        self.energy_associated_reward += energy_reward
 
-            self.energy_level_log.append(self.fish.energy_level)
-            if self.fish.energy_level < 0:
-                print("Fish ran out of energy")
-                done = True
-                self.recent_cause_of_death = "Starvation"
+        self.energy_level_log.append(self.fish.energy_level)
+        if self.fish.energy_level < 0:
+            print("Fish ran out of energy")
+            done = True
+            self.recent_cause_of_death = "Starvation"
 
         # Salt
         if self.env_variables["salt"]:
             self.salt_concentration = self.salt_gradient[int(self.fish.body.position[0]), int(self.fish.body.position[1])]
            
-            reward -= self.env_variables["salt_reward_penalty"] * self.salt_concentration
-            self.salt_associated_reward -= self.env_variables['salt_reward_penalty'] * self.salt_concentration
+            reward += self.env_variables["reward_salt_factor"] * self.salt_concentration
+            self.salt_associated_reward += self.env_variables["reward_salt_factor"] * self.salt_concentration
         else:
             self.salt_concentration = 0
 
         if self.fish.touched_edge_this_step:
-            reward -= self.env_variables["wall_touch_penalty"]
-            self.wall_associated_reward -= self.env_variables["wall_touch_penalty"]
+            reward += self.env_variables["reward_wall_touch"]
+            self.wall_associated_reward += self.env_variables["reward_wall_touch"]
 
             self.fish.touched_edge_this_step = False
 
-        if self.env_variables["prey_reproduction_mode"] and self.env_variables["differential_prey"] and not self.env_variables["test_sensory_system"]:
+        if self.env_variables["prey_reproduction_mode"] and self.env_variables["prey_cloud_num"] > 0 and not self.env_variables["test_sensory_system"]:
             self.reproduce_prey()
             self.prey_ages = [age + 1 for age in self.prey_ages]
             for i, age in enumerate(self.prey_ages):
                 if age > self.env_variables["prey_safe_duration"] and\
-                        self.rng.random(1) < self.env_variables["p_prey_death"]:
+                        self.rng.random(1) < self.env_variables["prey_p_death"]:
                     if not self.check_proximity(self.prey_bodies[i].position, 200):
                         self.remove_prey(i)
                         self.available_prey -= 1
 
         self.num_steps += 1
-        if self.num_steps >= self.env_variables["max_epLength"]:
+        if self.num_steps >= self.env_variables["max_episode_length"]:
             print("Fish ran out of time")
             done = True
             self.recent_cause_of_death = "Time"
@@ -980,10 +929,7 @@ class BaseEnvironment(dm_env.Environment):
 
     def observation_spec(self) -> specs.BoundedArray:
         """Returns the observation spec."""
-        len_internal_state = self.env_variables['in_light'] + self.env_variables['stress'] + \
-                                self.env_variables['energy_state'] + self.env_variables['salt']
-        if len_internal_state == 0:
-            len_internal_state = 1
+        len_internal_state = 3
         vis_shape = (len(self.fish.left_eye.interpolated_observation_angles), 3, 2)
         obs_spec = [specs.Array(shape=vis_shape, dtype='float32', name="visual_input"),
                     specs.Array(shape=(len_internal_state,), dtype='float32', name="internal_state")]
@@ -1005,25 +951,8 @@ class BaseEnvironment(dm_env.Environment):
         # print minimal and maximal values of visual input:
         visual_input = visual_input.astype(np.float32)
         # Calculate internal state
-        internal_state = []
-        internal_state_order = []
-        if self.env_variables['in_light']:
-            internal_state.append(self.fish.body.position[1] > self.dark_row)
-            internal_state_order.append("in_light")
-        if self.env_variables['stress']:
-            internal_state.append(self.fish.stress)
-            internal_state_order.append("stress")
-        if self.env_variables['energy_state']:
-            internal_state.append(self.fish.energy_level)
-            internal_state_order.append("energy_state")
-        if self.env_variables['salt']:
-            
-            internal_state.append(self.salt_concentration)
-
-            internal_state_order.append("salt")
-        if len(internal_state) == 0:
-            internal_state.append(0)
-        internal_state = np.array(internal_state, dtype=np.float32)
+        is_in_light = self.fish.body.position[1] > self.dark_row
+        internal_state = np.array([is_in_light, self.fish.energy_level, self.salt_concentration], dtype=np.float32)
         return OAR(observation=[visual_input, internal_state],action=action, reward=reward)
     
     def init_predator(self):

@@ -60,21 +60,23 @@ FLAGS = flags.FLAGS
 flags.DEFINE_bool(
     'run_distributed', True, 'Should an agent be executed in a distributed '
     'way. If False, will run single-threaded.')
-
 flags.DEFINE_integer(
     'num_actors', 15, 'Number of actors to use in the distributed setting. '
     'If run_distributed is False, this will be ignored.')
 flags.DEFINE_string(
-    'directory', 'my_training',
-    'Directory to store training logs and checkpoints.')
+    'dir', '.', 'Results home directory.')
 flags.DEFINE_string(
-    'env_config_file', 'stage1_env.json',
-    'Which environment config file to use from env_config directory.')
+    'subdir', None, 'Subdirectory for this experiment.')
+flags.DEFINE_string(
+    'env_config_file', None,
+    'Which environment config file to use.')
 flags.DEFINE_integer(
-    'seed', 1, 'Random seed to use for the experiment.')
+    'seed', 42, 'Random seed to use for the experiment.')
 flags.DEFINE_integer(
-    'num_steps', 200_000_000, 'Number of steps to run the experiment for.')
+    'num_steps', 300_000_000, 'Number of steps to run the experiment for.')
 
+flags.mark_flag_as_required('env_config_file')
+flags.mark_flag_as_required('subdir')
 
 actions = Actions()
 actions.from_hdf5('actions_all_bouts.h5')
@@ -119,7 +121,7 @@ def build_experiment_config(training_parameters: dict) -> experiments.Experiment
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    env_variables = json.load(open('env_config/' + training_parameters['env_config_file'], 'r'))
+    env_variables = json.load(open(training_parameters['env_config_file'], 'r'))
     return BaseEnvironment(env_variables=env_variables, seed=seed, actions=actions.get_all_actions())
 
   # Configure the agent.
@@ -252,9 +254,11 @@ def build_experiment_config(training_parameters: dict) -> experiments.Experiment
 
 
 def main(_):
+  directory = f'{FLAGS.dir}/{FLAGS.subdir}'
+
   training_parameters = {'num_steps': FLAGS.num_steps,
                        'seed': FLAGS.seed,
-                       'evaluator_waiting_minutes': 30,
+                       'evaluator_waiting_minutes': 60,
                        'num_actors': FLAGS.num_actors,
                        'burn_in_length': 8,
                        'trace_length': 75,
@@ -265,7 +269,7 @@ def main(_):
                        'learning_rate': 1e-4,
                        'target_update_period': 1200,
                        'variable_update_period': 100,
-                       'directory': FLAGS.directory,
+                       'directory': directory,
                        'env_config_file': FLAGS.env_config_file
                        }
 

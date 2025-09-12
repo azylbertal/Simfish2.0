@@ -104,30 +104,30 @@ class Arena:
     def __init__(self, env_variables, rng):
         self.test_mode = env_variables['test_sensory_system']
         self.rng = rng
-        self.bottom_intensity = env_variables['bottom_intensity']
-        self.max_uv_range = np.round(np.absolute(np.log(0.001) / env_variables["light_decay_rate"])).astype(np.int32)
+        self.bottom_intensity = env_variables['arena_bottom_intensity']
+        self.max_uv_range = np.round(np.absolute(np.log(0.001) / env_variables["arena_light_decay_rate"])).astype(np.int32)
 
         self.arena_width = env_variables['arena_width']
         self.arena_height = env_variables['arena_height']
-        self.dark_gain = env_variables['dark_gain']
-        self.light_gradient = env_variables['light_gradient']
+        self.dark_gain = env_variables['arena_dark_gain']
+        self.light_gradient = env_variables['arena_light_gradient']
         if self.test_mode:
             self.dark_light_ratio = 0.5
         else:
-            self.dark_light_ratio = env_variables['dark_light_ratio']
+            self.dark_light_ratio = env_variables['arena_dark_fraction']
 
-        self.sediment_sigma = env_variables['sediment_sigma']
+        self.sediment_sigma = env_variables['arena_sediment_sigma']
 
-        max_viewing_elevation = max(env_variables["viewing_elevations"])
-        self.max_red_range = np.round(env_variables["elevation"] * np.tan(np.radians(max_viewing_elevation))).astype(np.int32) + 8 # +8 is to allow for some extra space around the fish in FOV
+        max_viewing_elevation = max(env_variables["eyes_viewing_elevations"])
+        self.max_red_range = np.round(env_variables["fish_elevation"] * np.tan(np.radians(max_viewing_elevation))).astype(np.int32) + 8 # +8 is to allow for some extra space around the fish in FOV
 
 
         self.global_sediment_grating = self.get_global_sediment()
         self.global_luminance_mask = self.get_global_luminance()
         self.illuminated_sediment = self.global_sediment_grating * self.global_luminance_mask
 
-        self.red_FOV = FieldOfView(self.max_red_range, self.arena_width, self.arena_height, env_variables['light_decay_rate'])
-        self.uv_FOV = FieldOfView(self.max_uv_range, self.arena_width, self.arena_height, env_variables['light_decay_rate'])
+        self.red_FOV = FieldOfView(self.max_red_range, self.arena_width, self.arena_height, env_variables['arena_light_decay_rate'])
+        self.uv_FOV = FieldOfView(self.max_uv_range, self.arena_width, self.arena_height, env_variables['arena_light_decay_rate'])
 
     def get_global_sediment(self):
 

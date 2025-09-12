@@ -202,9 +202,9 @@ class DrawingBoard:
     def __init__(self, env_variables, data, include_background):
         self.width = env_variables["arena_width"]
         self.height = env_variables["arena_height"]
-        self.light_gradient = env_variables["light_gradient"]
-        self.dark_gain = env_variables["dark_gain"]
-        self.dark_light_ratio = env_variables["dark_light_ratio"]
+        self.light_gradient = env_variables["arena_light_gradient"]
+        self.dark_gain = env_variables["arena_dark_gain"]
+        self.dark_light_ratio = env_variables["arena_dark_fraction"]
         if env_variables["test_sensory_system"]:
             self.dark_light_ratio = 0.5
         self.include_background = include_background

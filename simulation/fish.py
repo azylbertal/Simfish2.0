@@ -54,7 +54,7 @@ class Fish:
 
         # Init visual fields.
         self.verg_angle = env_variables['eyes_verg_angle'] * (np.pi / 180)
-        self.retinal_field = env_variables['visual_field'] * (np.pi / 180)
+        self.retinal_field = env_variables['eyes_visual_field'] * (np.pi / 180)
         self.conv_state = 0
 
 
@@ -64,7 +64,6 @@ class Fish:
                              max_uv_range=self.max_uv_range, rng=self.rng)
 
         self.hungry = 0
-        self.stress = 1
         self.prey_consumed = False
         self.touched_edge = False
         self.touched_predator = False
@@ -76,66 +75,20 @@ class Fish:
 
         # Energy system (new simulation)
         self.energy_level = 1.0
-        self.i_scaling_energy_cost = self.env_variables['i_scaling_energy_cost']
-        self.a_scaling_energy_cost = self.env_variables['a_scaling_energy_cost']
-        self.baseline_energy_use = self.env_variables['baseline_energy_use']
+        self.i_scaling_energy_cost = self.env_variables['energy_impulse_factor']
+        self.a_scaling_energy_cost = self.env_variables['energy_angle_factor']
+        self.baseline_energy_use = self.env_variables['energy_baseline']
 
-        self.action_energy_reward_scaling = self.env_variables['action_energy_reward_scaling']
-
-        if "action_energy_use_scaling" in self.env_variables:
-            self.action_energy_use_scaling = self.env_variables["action_energy_use_scaling"]
-        else:
-            self.action_energy_use_scaling = "Linear"  # Default to linear if not specified
-
+        self.action_energy_reward_scaling = self.env_variables['reward_energy_use_factor']
 
         # Touch edge - for penalty
         self.touched_edge_this_step = False
 
-        self.impulse_vector_x = 0
-        self.impulse_vector_y = 0
-
-        self.deterministic_action = self.env_variables['deterministic_action']
+        self.deterministic_action = self.env_variables['fish_deterministic_action']
 
     def draw_angle_dist(self, action):
 
-        # if bout_id == 0:  # Slow2
-        #     mean = [2.49320953e+00, 2.36217665e-19]
-        #     cov = [[4.24434912e-01, 1.89175382e-18],
-        #             [1.89175382e-18, 4.22367139e-03]]
-        # elif bout_id == 1 or bout_id == 2:  # RT
-        #     mean = [2.74619216, 0.82713249]
-        #     cov = [[0.3839484,  0.02302918],
-        #         [0.02302918, 0.03937928]]
-        # elif bout_id == 3:  # sCS
-        #     mean = [0.956603146, -6.86735892e-18]
-        #     cov = [[2.27928786e-02, 1.52739195e-19],
-        #         [1.52739195e-19, 3.09720798e-03]]
-        # elif bout_id == 4 or bout_id == 5:  # J-turn 1
-        #     mean = [0.49074911, 0.39750791]
-        #     cov = [[0.00679925, 0.00071446],
-        #         [0.00071446, 0.00626601]]
-        # elif bout_id == 6:  # do nothing
-        #     mean = [0, 0]
-        #     cov = [[0, 0],
-        #         [0, 0]]
-        # elif bout_id == 7 or bout_id == 8:  # C-Start
-        #     mean = [7.03322223, 0.67517832]
-        #     cov = [[1.35791922, 0.10690938],
-        #         [0.10690938, 0.10053853]]
-        # elif bout_id == 9:  # AS
-        #     mean = [6.42048088e-01, 1.66490488e-17]
-        #     cov = [[3.99909515e-02, 3.58321400e-19],
-        #         [3.58321400e-19, 3.24366068e-03]]
-
-        # elif bout_id == 10 or bout_id == 11:  # J-turn 2
-        #     mean = [1.0535197,  0.61945679]
-        #     # cov = [[ 0.0404599,  -0.00318193],
-        #     #        [-0.00318193,  0.01365224]]
-        #     cov = [[0.0404599,  0.0],
-        #         [0.0,  0.01365224]]
-        # else:
-        #     raise ValueError(f"Unknown bout_id: {bout_id}")
-
+        """Draw a bout angle and distance from the action distribution."""
         bout_vals = self.rng.multivariate_normal(action['mean'], action['cov'], 1)
         return bout_vals[0, 1], bout_vals[0, 0], action['mean'][1], action['mean'][0]
 
@@ -182,20 +135,9 @@ class Fish:
         """Updates the current energy state for continuous and discrete fish."""
         energy_gain = consumption
 
-        if self.action_energy_use_scaling == "Nonlinear":
-            energy_use = self.i_scaling_energy_cost * (abs(self.prev_action_impulse) ** 2) + \
-                         self.a_scaling_energy_cost * (abs(self.prev_action_angle) ** 2) + \
-                         self.baseline_energy_use
-        elif self.action_energy_use_scaling == "Linear":
-            energy_use = self.i_scaling_energy_cost * (abs(self.prev_action_impulse)) + \
-                         self.a_scaling_energy_cost * (abs(self.prev_action_angle)) + \
-                         self.baseline_energy_use
-        elif self.action_energy_use_scaling == "Sublinear":
-            energy_use = self.i_scaling_energy_cost * (abs(self.prev_action_impulse) ** 0.5) + \
-                         self.a_scaling_energy_cost * (abs(self.prev_action_angle) ** 0.5) + \
-                         self.baseline_energy_use
-        else:
-            raise ValueError(f"Unknown action energy use scaling: {self.action_energy_use_scaling}")
+        energy_use = self.i_scaling_energy_cost * (abs(self.prev_action_impulse)) + \
+                        self.a_scaling_energy_cost * (abs(self.prev_action_angle)) + \
+                        self.baseline_energy_use
             
         if self.actions[self.prev_action]['is_capture']:
             energy_use *= self.env_variables['capture_swim_energy_cost_scaling']
