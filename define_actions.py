@@ -78,7 +78,7 @@ class Actions:
         pos = np.dstack((xx, yy))
         plt.figure()
         for id, action in enumerate(self.actions):
-            rv = multivariate_normal(action['mean'], action['cov'])
+            rv = multivariate_normal(action['mean'], action['cov'], allow_singular=True)
             pdf = rv.pdf(pos)
             half_max = np.max(pdf) / 2
             CS = plt.contour(xx, yy, pdf, levels=[half_max], alpha=0.5, colors=[action['color']])
@@ -225,18 +225,31 @@ class Actions:
                 opposing_id = [i for i, a in enumerate(self.actions) if a['name'] == opposing_name][0]
                 opposing_dict[id] = opposing_id
         return opposing_dict
-    
+    def add_null_action(self):
+        """
+        Adds a null action with zero mean and covariance (no movement).
+        """
+        null_action = {
+            'name': 'Null',
+            'mean': np.array([0.0, 0.0]),
+            'cov': np.array([[0.0, 0.0], [0.0, 0.0]]),
+            'is_turn': False,
+            'is_capture': False,
+            'color': (0.5, 0.5, 0.5)
+        }
+        self.actions.append(null_action)
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    h5_file_path = "/home/asaph/Downloads/filtered_jmpool_kin.h5"  # Replace with your actual file path
+    h5_file_path = "filtered_jmpool_kin.h5"  # Bout data file path
 
     actions = Actions(h5_file_path, bouts_to_save=None)  # Use None to extract all bouts
     actions.sharpen_distributions(narrowing_coefficient=3, capture_narrowing_coefficient=10)
     actions.display_actions()
+    actions.add_null_action()
     print(f'opposing_dict: {actions.get_opposing_dict()}')
-    actions.to_hdf5("actions_all_bouts.h5")
-    actions.from_hdf5("actions_all_bouts.h5")
+    actions.to_hdf5("actions_all_bouts_with_null.h5")
+    actions.from_hdf5("actions_all_bouts_with_null.h5")
     actions.display_actions()
 
 

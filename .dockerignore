@@ -3,6 +3,7 @@ __pycache__
 quickstart*
 build
 *.mp4
+filtered_jmpool_kin.h5
 bouts.mat
 bout_distribution_sam.py
 *.7z

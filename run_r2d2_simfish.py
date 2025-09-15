@@ -26,7 +26,7 @@ from simulation.simfish_env import BaseEnvironment
 from R2D2Network import make_r2d2_networks
 from acme.utils import loggers
 from typing import Optional
-
+import dataclasses
 
 from typing import Iterator, Optional, Sequence
 from acme import core
@@ -74,13 +74,18 @@ flags.DEFINE_integer(
     'seed', 42, 'Random seed to use for the experiment.')
 flags.DEFINE_integer(
     'num_steps', 300_000_000, 'Number of steps to run the experiment for.')
+flags.DEFINE_string(
+  'actions_file', 'actions_all_bouts_with_null.h5',
+  'File containing all possible actions.'
+)
 
 flags.mark_flag_as_required('env_config_file')
 flags.mark_flag_as_required('subdir')
 
-actions = Actions()
-actions.from_hdf5('actions_all_bouts.h5')
-actions_mirror = actions.get_opposing_dict()
+@dataclasses.dataclass
+class SimfishR2D2Config(r2d2.R2D2Config):
+  """Configuration options for R2D2 agent."""
+  actions: Actions = Actions()
 
 class SimfishR2D2Builder(r2d2.R2D2Builder):
   def make_learner(
@@ -113,7 +118,7 @@ class SimfishR2D2Builder(r2d2.R2D2Builder):
         clip_rewards=self._config.clip_rewards,
         replay_client=replay_client,
         counter=counter,
-        actions_mirror=actions_mirror,
+        actions_mirror=self._config.actions.get_opposing_dict(),
         logger=logger_fn('learner'))
 
 def build_experiment_config(training_parameters: dict) -> experiments.ExperimentConfig:
@@ -122,10 +127,10 @@ def build_experiment_config(training_parameters: dict) -> experiments.Experiment
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
     env_variables = json.load(open(training_parameters['env_config_file'], 'r'))
-    return BaseEnvironment(env_variables=env_variables, seed=seed, actions=actions.get_all_actions())
+    return BaseEnvironment(env_variables=env_variables, seed=seed, actions=training_parameters['actions'].get_all_actions())
 
   # Configure the agent.
-  config = r2d2.R2D2Config(
+  config = SimfishR2D2Config(
       burn_in_length=training_parameters['burn_in_length'],
       trace_length=training_parameters['trace_length'],
       sequence_period=training_parameters['sequence_period'],
@@ -137,6 +142,7 @@ def build_experiment_config(training_parameters: dict) -> experiments.Experiment
       learning_rate=training_parameters['learning_rate'],
       target_update_period=training_parameters['target_update_period'],
       variable_update_period=training_parameters['variable_update_period'],
+      actions=training_parameters['actions']
   )
   network_factory = make_r2d2_networks
   builder = SimfishR2D2Builder(config)
@@ -160,12 +166,11 @@ def build_experiment_config(training_parameters: dict) -> experiments.Experiment
   def make_tfsummary_logger(label: str,
                             steps_key: Optional[str] = None,
                             task_instance: int = 0) -> loggers.Logger:
-    del task_instance
     if steps_key is None:
       steps_key = f'{label}_steps'
 
     my_loggers = [tf_summary.TFSummaryLogger(
-        label=label, logdir=f"{training_parameters['directory']}/logs/training",steps_key=steps_key)]
+        label=label, logdir=f"{training_parameters['directory']}/logs/training/{label}_{task_instance}",steps_key=steps_key)]
     
     # Dispatch to all writers and filter Nones and by time.
     logger = aggregators.Dispatcher(my_loggers, loggers_base.to_numpy)
@@ -256,6 +261,9 @@ def build_experiment_config(training_parameters: dict) -> experiments.Experiment
 def main(_):
   directory = f'{FLAGS.dir}/{FLAGS.subdir}'
 
+  actions = Actions()
+  actions.from_hdf5(FLAGS.actions_file)
+
   training_parameters = {'num_steps': FLAGS.num_steps,
                        'seed': FLAGS.seed,
                        'evaluator_waiting_minutes': 60,
@@ -270,7 +278,8 @@ def main(_):
                        'target_update_period': 1200,
                        'variable_update_period': 100,
                        'directory': directory,
-                       'env_config_file': FLAGS.env_config_file
+                       'env_config_file': FLAGS.env_config_file,
+                       'actions': actions
                        }
 
   print(f"Running R2D2 with the following parameters: {training_parameters}")
