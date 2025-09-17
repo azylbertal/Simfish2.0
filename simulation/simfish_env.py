@@ -522,7 +522,7 @@ class BaseEnvironment(dm_env.Environment):
         # Generate impulses
         impulse_types = [0, self.env_variables["prey_impulse_slow"], self.env_variables["prey_impulse_fast"]]
         impulses = [impulse_types[gait] for gait in self.paramecia_gaits]
-        for touched_index in self.touched_prey_indices: # translate these prey to random locations within 10 pixels of current
+        for touched_index in self.touched_prey_indices: # Impulse from being touched by fish
             impulses[touched_index] += self.env_variables["prey_impulse_jump"]            
 
         # Do once per step.
@@ -608,10 +608,13 @@ class BaseEnvironment(dm_env.Environment):
             return True
     
     def prey_touch_body(self, arbiter, space, data):
+        touched_prey_index = None
         for i, shp in enumerate(self.prey_shapes):
             if shp == arbiter.shapes[0]:
                 touched_prey_index = i
                 break
+        if touched_prey_index is None: # already removed (prey touched mouth first)
+            return True
         self.touched_prey_indices.append(touched_prey_index)
         return True
     
@@ -622,6 +625,11 @@ class BaseEnvironment(dm_env.Environment):
         del self.prey_ages[prey_index]
         del self.paramecia_gaits[prey_index]
         del self.prey_identifiers[prey_index]
+        while True:
+            if prey_index in self.touched_prey_indices:
+                self.touched_prey_indices.remove(prey_index)
+            else:
+                break
 
     def move_predator(self):
         if self.check_predator_at_target() or self.check_predator_outside_walls():

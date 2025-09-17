@@ -35,10 +35,10 @@ flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
 FLAGS = flags.FLAGS
 
 actions = Actions()
-actions.from_hdf5('actions_all_bouts.h5')
+actions.from_hdf5('actions_all_bouts_with_null.h5')
 actions_mirror = actions.get_opposing_dict()
 
-directory = 'stage2_demo_later'
+directory = '/home/asaph/gcp_output/stage2_sparse/stage2_1'
 
 def build_experiment_config():
   """Builds R2D2 experiment config which can be executed in different ways."""
@@ -46,7 +46,7 @@ def build_experiment_config():
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    env_variables = json.load(open('env_config/stage2_env.json', 'r'))
+    env_variables = json.load(open('env_config/stage2_sparse_env.json', 'r'))
     return BaseEnvironment(env_variables=env_variables, seed=seed, actions=actions.get_all_actions())
 
   # Configure the agent.
@@ -86,7 +86,7 @@ def main(_):
 
 
   print('Running single-threaded.')
-  eval_agent(experiment=config, directory=directory, num_episodes=50)
+  eval_agent(experiment=config, directory=directory, num_episodes=20)
 
 
 if __name__ == '__main__':

@@ -119,7 +119,7 @@ def draw_lines_with_opacity(image, x_coords, y_coords, colors, L, thickness=5):
     return result_image
 
 actions = Actions()
-actions.from_hdf5('actions_all_bouts.h5')
+actions.from_hdf5('actions_all_bouts_with_null.h5')
 actions = actions.get_all_actions()
 
 class Vanishing_Line(object):
@@ -444,7 +444,9 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
     position_buffer = []
     orientation_buffer = []
     consumption_buffer = []
-                
+    if len(fish_positions) < num_steps: # Don't try to draw more steps than exist
+        num_steps = len(fish_positions)
+
         #frames = np.zeros((num_steps, int(env_variables["arena_height"]*scale), int((env_variables["arena_width"]+addon)*scale), 3))
     with writer.saving(fig, "writer_test.mp4", 100):
         for step in range(num_steps):
@@ -571,7 +573,7 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
 
 if __name__ == "__main__":
 
-    data_file = '/home/asaph/src/simfish2.0/stage2_demo_later/logs/model_evaluation/logs_30.hdf5'
+    data_file = '/home/asaph/gcp_output/stage2_sparse/stage2_1/logs/model_evaluation/logs_1.hdf5'
     # data_file = '/home/asaph/cs_cluster/Simfish2.0/test_stage1/logs/evaluator/logs_70.hdf5'
     num_steps = int(sys.argv[1]) if len(sys.argv)>1 else 1000
     draw_episode(data_file, continuous_actions=False, show_energy_state=False, draw_past_actions=True,
