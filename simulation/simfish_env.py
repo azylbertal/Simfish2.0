@@ -524,8 +524,9 @@ class BaseEnvironment(dm_env.Environment):
         # Generate impulses
         impulse_types = [0, self.env_variables["prey_impulse_slow"], self.env_variables["prey_impulse_fast"]]
         impulses = [impulse_types[gait] for gait in self.paramecia_gaits]
-        for touched_index in self.touched_prey_indices: # Impulse from being touched by fish
-            impulses[touched_index] += self.env_variables["prey_impulse_jump"]            
+        if not self.fish.prey_consumed:
+            for touched_index in self.touched_prey_indices: # Impulse from being touched by fish
+                impulses[touched_index] += self.env_variables["prey_impulse_jump"]            
 
         # Do once per step.
         if micro_step == 0:
