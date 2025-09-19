@@ -125,15 +125,15 @@ class BaseEnvironment(dm_env.Environment):
         if self.env_variables["prey_cloud_num"] > 0:
             self.prey_cloud_locations = [
                 [self.rng.integers(
-                    low=120 + self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius'],
+                    low=(self.env_variables["prey_cloud_region_size"] / 2) + self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius'],
                     high=self.env_variables['arena_width'] - (
                             self.env_variables['prey_radius'] + self.env_variables[
-                        'fish_mouth_radius']) - 120),
+                        'fish_mouth_radius']) - (self.env_variables["prey_cloud_region_size"] / 2)),
                  self.rng.integers(
-                     low=120 + self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius'],
+                     low=(self.env_variables["prey_cloud_region_size"] / 2) + self.env_variables['prey_radius'] + self.env_variables['fish_mouth_radius'],
                      high=self.env_variables['arena_height'] - (
                              self.env_variables['prey_radius'] + self.env_variables[
-                         'fish_mouth_radius']) - 120)]
+                         'fish_mouth_radius']) - (self.env_variables["prey_cloud_region_size"] / 2))]
                 for cloud in range(int(self.env_variables["prey_cloud_num"]))]
 
             if not self.env_variables["prey_reproduction_mode"]:
@@ -255,7 +255,8 @@ class BaseEnvironment(dm_env.Environment):
         self.prey_bodies = []
         self.prey_identifiers = []
         self.paramecia_gaits = []
-        self.prey_ages = []
+        if self.env_variables["prey_reproduction_mode"]:
+            self.prey_ages = []
         self.total_prey_created = 0
 
     def reproduce_prey(self):
@@ -288,19 +289,20 @@ class BaseEnvironment(dm_env.Environment):
 
     def build_prey_cloud_walls(self):
         for i in self.prey_cloud_locations:
+            half_cloud_size = (self.env_variables["prey_cloud_region_size"] / 2)
             wall_edges = [
                 pymunk.Segment(
                     self.space.static_body,
-                    (i[0] - 150, i[1] - 150), (i[0] - 150, i[1] + 150), 1),
+                    (i[0] - half_cloud_size, i[1] - half_cloud_size), (i[0] - half_cloud_size, i[1] + half_cloud_size), 1),
                 pymunk.Segment(
                     self.space.static_body,
-                    (i[0] - 150, i[1] + 150), (i[0] + 150, i[1] + 150), 1),
+                    (i[0] - half_cloud_size, i[1] + half_cloud_size), (i[0] + half_cloud_size, i[1] + half_cloud_size), 1),
                 pymunk.Segment(
                     self.space.static_body,
-                    (i[0] + 150, i[1] + 150), (i[0] + 150, i[1] - 150), 1),
+                    (i[0] + half_cloud_size, i[1] + half_cloud_size), (i[0] + half_cloud_size, i[1] - half_cloud_size), 1),
                 pymunk.Segment(
                     self.space.static_body,
-                    (i[0] - 150, i[1] - 150), (i[0] + 150, i[1] - 150), 1)
+                    (i[0] - half_cloud_size, i[1] - half_cloud_size), (i[0] + half_cloud_size, i[1] - half_cloud_size), 1)
             ]
             for s in wall_edges:
                 s.friction = 1.
@@ -622,7 +624,8 @@ class BaseEnvironment(dm_env.Environment):
         self.space.remove(self.prey_shapes[prey_index], self.prey_shapes[prey_index].body)
         del self.prey_shapes[prey_index]
         del self.prey_bodies[prey_index]
-        del self.prey_ages[prey_index]
+        if self.env_variables["prey_reproduction_mode"]:
+            del self.prey_ages[prey_index]
         del self.paramecia_gaits[prey_index]
         del self.prey_identifiers[prey_index]
         while True:
