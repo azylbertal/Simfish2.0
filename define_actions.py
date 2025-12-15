@@ -1,7 +1,12 @@
 import h5py
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 from scipy.stats import zscore, multivariate_normal
 from scipy import odr
+import matplotlib.pyplot as plt
+
+plt.rcParams['svg.fonttype'] = 'none' # To get editable text in Illustrator
+
 
 PIXEL_SIZE = 0.058  # mm per pixel, as per the original code
 ALL_BOUT_NAMES = ['SCS', 'LCS', 'BS', 'O-bend', 'J-turn', 'SLC', 'Slow1', 'RT', 'Slow2', 'LLC', 'AS', 'SAT', 'HAT']
@@ -74,18 +79,48 @@ class Actions:
     
     def display_actions(self):
 
-        xx, yy = np.mgrid[0:20:.1, -3:3:.01]
+        xx, yy = np.mgrid[0:20:.1, -180:180:.5]
         pos = np.dstack((xx, yy))
         plt.figure()
         for id, action in enumerate(self.actions):
-            rv = multivariate_normal(action['mean'], action['cov'], allow_singular=True)
+            if action['name'] == 'Null':
+                scatter = plt.scatter(0, 0, color=action['color'], label='Null', s=100, edgecolors='black', zorder=5)
+                continue
+            a_mean = np.copy(action['mean'])
+            a_cov = np.copy(action['cov'])
+            # convert angle to degrees:
+            a_mean[1] *= 180/np.pi
+            a_cov[1, 1] *= (180/np.pi)**2
+            a_cov[0, 1] *= (180/np.pi)
+            a_cov[1, 0] *= (180/np.pi)
+            rv = multivariate_normal(a_mean, a_cov, allow_singular=True)
             pdf = rv.pdf(pos)
             half_max = np.max(pdf) / 2
-            CS = plt.contour(xx, yy, pdf, levels=[half_max], alpha=0.5, colors=[action['color']])
-            label = f'{id}-{action["name"]}'
-            plt.clabel(CS, CS.levels, fmt={CS.levels[0]:label}, fontsize=8, inline_spacing=1)
+            # CS = plt.contour(xx, yy, pdf, levels=[half_max], alpha=0.8, colors=[action['color']])
+            levels = np.linspace(np.max(pdf)/2, np.max(pdf), 10)
+            # create a colormap that goes from transparent to the action color, ie rgb stay the same but alpha goes from 0 to 1
+            this_cmap = LinearSegmentedColormap.from_list('this_cmap', [(action['color'][0], action['color'][1], action['color'][2], 0), (action['color'][0], action['color'][1], action['color'][2], 1)])
+            CS = plt.contourf(xx, yy, pdf, levels=levels, cmap=this_cmap, antialiased=True)
+            label = f'{action["name"]}'
+            # plt.clabel(CS, CS.levels, fmt={CS.levels[0]:label}, fontsize=8, inline_spacing=1)
         plt.xlabel('Distance (mm)')
-        plt.ylabel('Angle (radians)')
+        plt.ylabel('Angle (degrees)')
+        # create a legend with the action names and colors
+        # create a custom legend
+        import matplotlib.patches as mpatches
+        patches = []
+        for action in self.actions:
+            # if action['name'] == 'Null':
+            #     continue
+            this_name = action['name']
+            if '_L' in this_name:
+                this_name = this_name.split('_L')[0]
+            elif '_R' in this_name:
+                continue
+            patches.append(mpatches.Patch(color=action['color'], label=this_name))
+        plt.legend(handles=patches, loc='upper right', borderaxespad=0.)
+        plt.title('Action Distributions')
+        
 
     def get_all_actions(self):
         return self.actions
@@ -235,7 +270,7 @@ class Actions:
             'cov': np.array([[0.0, 0.0], [0.0, 0.0]]),
             'is_turn': False,
             'is_capture': False,
-            'color': (0.5, 0.5, 0.5)
+            'color': (0, 0, 0)
         }
         self.actions.append(null_action)
 if __name__ == "__main__":

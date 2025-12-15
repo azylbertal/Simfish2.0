@@ -377,9 +377,9 @@ def draw_previous_actions(board, past_actions, past_positions,
 
 
 
-def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, show_energy_state=False,
-                 scale=1.0, trim_to_fish=False, showed_region_quad=500, n_actions_to_show=500,
-                 save_id="placeholder", s_per_frame=0.03, include_background=False, num_steps=1000):
+def draw_episode(data_file, video_file, continuous_actions=False,  draw_past_actions=True, show_energy_state=False,
+                 trim_to_fish=False, showed_region_quad=500, n_actions_to_show=500,
+                 include_background=False, num_steps=1000):
     
 
     with h5py.File(data_file, 'r') as datfl:
@@ -448,7 +448,7 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
         num_steps = len(fish_positions)
 
         #frames = np.zeros((num_steps, int(env_variables["arena_height"]*scale), int((env_variables["arena_width"]+addon)*scale), 3))
-    with writer.saving(fig, "writer_test.mp4", 100):
+    with writer.saving(fig, video_file, 100):
         for step in range(num_steps):
             board.db = board.get_base_arena(0.3)
 
@@ -573,11 +573,12 @@ def draw_episode(data_file, continuous_actions=False,  draw_past_actions=True, s
 
 if __name__ == "__main__":
 
-    data_file = '/home/asaph/gcp_output/stage2_sparse/stage2_1/logs/model_evaluation/logs_1.hdf5'
+    data_file = str(sys.argv[1])
+    video_file = str(sys.argv[2])
     # data_file = '/home/asaph/cs_cluster/Simfish2.0/test_stage1/logs/evaluator/logs_70.hdf5'
-    num_steps = int(sys.argv[1]) if len(sys.argv)>1 else 1000
-    draw_episode(data_file, continuous_actions=False, show_energy_state=False, draw_past_actions=True,
-                 trim_to_fish=True, showed_region_quad=600, save_id="ep1902", include_background=True, n_actions_to_show=25, num_steps=num_steps)
+    num_steps = int(sys.argv[3]) if len(sys.argv)>3 else 1000
+    draw_episode(data_file, video_file, continuous_actions=False, show_energy_state=False, draw_past_actions=True,
+                 trim_to_fish=True, showed_region_quad=600, include_background=True, n_actions_to_show=25, num_steps=num_steps)
 
 
 

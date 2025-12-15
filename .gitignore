@@ -5,6 +5,7 @@ build
 *.mp4
 bouts.mat
 bout_distribution_sam.py
+.ipynb_checkpoints
 *.h5
 *.7z
 *.jpg

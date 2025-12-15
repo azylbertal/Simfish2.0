@@ -42,10 +42,10 @@ class FieldOfView:
         self.enclosed_fov_right = None
 
     def _get_local_scatter(self):
-        """Computes effects of absorption and scatter, but incorporates effect of implicit scatter from line spread."""
+        """Computes effects of absorption and scatter"""
         x, y = np.arange(self.local_dim), np.arange(self.local_dim)
         y = np.expand_dims(y, 1)
-        j = self.max_visual_distance + 1
+        j = self.max_visual_distance# + 1
         positional_mask = (((x - j) ** 2 + (y - j) ** 2) ** 0.5)  # Measure of distance from centre to every pixel
         return np.exp(-self.light_decay_rate * positional_mask)
 

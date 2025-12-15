@@ -93,6 +93,7 @@ class Fish:
         return bout_vals[0, 1], bout_vals[0, 0], action['mean'][1], action['mean'][0]
 
     def take_action(self, action_id):
+
         self.prev_action = action_id
 
         if self.env_variables['test_sensory_system']:
@@ -145,7 +146,10 @@ class Fish:
         energy_change = energy_gain - energy_use
 
         reward = -energy_use * self.action_energy_reward_scaling
-        self.energy_level += energy_change
 
-        self.energy_level = min(self.energy_level, 1.0)  # Ensure energy level does not exceed 1.0
+        if "fish_fixed_energy_level" in self.env_variables and self.env_variables["fish_fixed_energy_level"]:
+            pass
+        else:
+            self.energy_level += energy_change
+            self.energy_level = min(self.energy_level, 1.0)  # Ensure energy level does not exceed 1.0
         return reward

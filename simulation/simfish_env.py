@@ -89,8 +89,11 @@ class BaseEnvironment(dm_env.Environment):
         self.energy_level_log = []
         self.salt_concentration = 0
         self.switch_step = None
-        # New energy system:
-        self.fish.energy_level = 1
+
+        if "fish_init_energy_level" in self.env_variables:
+            self.fish.energy_level = self.env_variables["fish_init_energy_level"]
+        else:
+            self.fish.energy_level = 1
 
         # Reset salt gradient
         if self.env_variables["salt"]:
@@ -238,7 +241,7 @@ class BaseEnvironment(dm_env.Environment):
         self.pred_prey_wall2.begin = self.no_collision
 
     def clear_environmental_features(self):
-        """Removes all prey, predators, and sand grains from simulation"""
+        """Removes all prey and predators from the simulation"""
         for i, shp in enumerate(self.prey_shapes):
             self.space.remove(shp, shp.body)
 
@@ -478,44 +481,6 @@ class BaseEnvironment(dm_env.Environment):
         fish_prey_distances = ((fish_prey_vectors[:, 0] ** 2) + (fish_prey_vectors[:, 1] ** 2)) ** 0.5
         within_range = fish_prey_distances < sensing_distance
         return within_range
-
-    def get_fish_prey_incidence(self):
-        fish_orientation = self.fish.body.angle
-        fish_position = np.expand_dims(np.array(self.fish.body.position), axis=0)
-        paramecium_positions = np.array([pr.position for pr in self.prey_bodies])
-        fish_orientation = np.array([fish_orientation])
-
-        fish_orientation_sign = ((fish_orientation >= 0) * 1) + ((fish_orientation < 0) * -1)
-
-        # Remove full orientations (so is between -2pi and 2pi
-        fish_orientation %= 2 * np.pi * fish_orientation_sign
-
-        # Convert to positive scale between 0 and 2pi
-        fish_orientation[fish_orientation < 0] += 2 * np.pi
-
-        fish_prey_vectors = paramecium_positions - fish_position
-
-        # Adjust according to quadrents.
-        fish_prey_angles = np.arctan(fish_prey_vectors[:, 1] / fish_prey_vectors[:, 0])
-
-        #   Generates positive angle from left x axis clockwise.
-        # UL quadrent
-        in_ul_quadrent = (fish_prey_vectors[:, 0] < 0) * (fish_prey_vectors[:, 1] > 0)
-        fish_prey_angles[in_ul_quadrent] += np.pi
-        # BR quadrent
-        in_br_quadrent = (fish_prey_vectors[:, 0] > 0) * (fish_prey_vectors[:, 1] < 0)
-        fish_prey_angles[in_br_quadrent] += (np.pi * 2)
-        # BL quadrent
-        in_bl_quadrent = (fish_prey_vectors[:, 0] < 0) * (fish_prey_vectors[:, 1] < 0)
-        fish_prey_angles[in_bl_quadrent] += np.pi
-
-        # Angle ends up being between 0 and 2pi as clockwise from right x-axis. Same frame as fish angle:
-        fish_prey_incidence = np.expand_dims(np.array([fish_orientation]), 1) - fish_prey_angles
-
-        fish_prey_incidence[fish_prey_incidence > np.pi] %= np.pi
-        fish_prey_incidence[fish_prey_incidence < -np.pi] %= -np.pi
-
-        return fish_prey_incidence
 
     def move_prey(self, micro_step):
         if len(self.prey_bodies) == 0:

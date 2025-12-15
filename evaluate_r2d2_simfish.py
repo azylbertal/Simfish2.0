@@ -27,10 +27,29 @@ from define_actions import Actions
 
 
 # Flags which modify the behavior of the launcher.
-flags.DEFINE_bool(
-    'run_distributed', True, 'Should an agent be executed in a distributed '
-    'way. If False, will run single-threaded.')
-flags.DEFINE_integer('seed', 1, 'Random seed (experiment).')
+
+flags.DEFINE_string(
+    'dir', '.', 'Results home directory.')
+flags.DEFINE_string(
+    'subdir', None, 'Subdirectory for this experiment.')
+flags.DEFINE_string(
+    'log_subdir', None, 'Subdirectory for results.')
+
+flags.DEFINE_string(
+    'env_config_file', None,
+    'Which environment config file to use.')
+flags.DEFINE_integer(
+    'seed', 42, 'Random seed to use for the experiment.')
+flags.DEFINE_integer(
+    'num_episodes', 100, 'Number of episodes to run.')
+flags.DEFINE_string(
+  'actions_file', 'actions_all_bouts_with_null.h5',
+  'File containing all possible actions.'
+)
+
+flags.mark_flag_as_required('env_config_file')
+flags.mark_flag_as_required('subdir')
+flags.mark_flag_as_required('log_subdir')
 
 FLAGS = flags.FLAGS
 
@@ -38,15 +57,14 @@ actions = Actions()
 actions.from_hdf5('actions_all_bouts_with_null.h5')
 actions_mirror = actions.get_opposing_dict()
 
-directory = '/home/asaph/gcp_output/stage2_sparse/stage2_1'
 
-def build_experiment_config():
+def build_experiment_config(directory, env_config_file):
   """Builds R2D2 experiment config which can be executed in different ways."""
   batch_size = 32
 
   # Create an environment factory.
   def environment_factory(seed: int) -> dm_env.Environment:
-    env_variables = json.load(open('env_config/stage2_sparse_env.json', 'r'))
+    env_variables = json.load(open(env_config_file, 'r'))
     return BaseEnvironment(env_variables=env_variables, seed=seed, actions=actions.get_all_actions())
 
   # Configure the agent.
@@ -82,11 +100,13 @@ def build_experiment_config():
 
 
 def main(_):
-  config = build_experiment_config()
+  directory = f'{FLAGS.dir}/{FLAGS.subdir}'
+
+  config = build_experiment_config(directory, FLAGS.env_config_file)
 
 
   print('Running single-threaded.')
-  eval_agent(experiment=config, directory=directory, num_episodes=20)
+  eval_agent(experiment=config, directory=directory, num_episodes=FLAGS.num_episodes, log_subdir=FLAGS.log_subdir)
 
 
 if __name__ == '__main__':
