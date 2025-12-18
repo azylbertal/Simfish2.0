@@ -2,7 +2,7 @@
     "test_sensory_system": false,
     "max_sim_steps_per_episode": 1000,
     "phys_steps_per_sim_step": 100,
-    "sim_step_duration_seconds": 0.4,
+    "sim_step_duration_seconds": 0.2,
     "arena_width": 2500,
     "arena_height": 2500,
     "arena_dark_fraction": 0.3,
