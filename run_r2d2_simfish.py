@@ -50,7 +50,7 @@ from simfish_r2d2_learner import SimfishR2D2Learner
 from acme.utils.loggers import aggregators
 from acme.agents.jax.r2d2 import learning as r2d2_learning
 from acme.agents.jax.r2d2 import networks as r2d2_networks
-from define_actions import Actions
+from simulation.define_actions import Actions
 import optax
 
 
