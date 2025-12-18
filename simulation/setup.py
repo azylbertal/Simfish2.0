@@ -1,4 +1,4 @@
-# setup.py for geometry_cpp module
+# setup.py for geometry module
 from setuptools import setup, Extension
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 import pybind11
@@ -6,8 +6,8 @@ import pybind11
 # Define the extension module with OpenMP support
 ext_modules = [
     Pybind11Extension(
-        "geometry_cpp",  # Module name
-        ["geometry_cpp.cpp"],  # Source files
+        "geometry",  # Module name
+        ["geometry.cpp"],  # Source files
         cxx_std=17,  # Use C++17
         extra_compile_args=[
             "-O3",  # Maximum optimization
@@ -22,7 +22,7 @@ ext_modules = [
 ]
 
 setup(
-    name="geometry_cpp",
+    name="geometry",
     version="1.0.0",
     author="Asaph Zylbertal",
     description="Fast C++ implementation of geometry functions for fish visual system simulation",

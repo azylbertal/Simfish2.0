@@ -1,4 +1,4 @@
-// geometry_cpp.cpp
+// geometry.cpp
 // Copyright 2025 Asaph Zylbertal
 // Licensed under the Apache License, Version 2.0
 
@@ -416,7 +416,7 @@ py::array_t<double> read_prey_proj_cpp(
 
 
 // Pybind11 module definition
-PYBIND11_MODULE(geometry_cpp, m) {
+PYBIND11_MODULE(geometry, m) {
     m.doc() = "Fast C++ implementation of geometry functions";
     
     m.def("ray_sum", &ray_sum_cpp, 

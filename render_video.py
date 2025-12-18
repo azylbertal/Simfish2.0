@@ -22,7 +22,7 @@ from sklearn.decomposition import PCA
 from scipy.signal import detrend
 from scipy.stats import zscore
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
-from define_actions import Actions
+from simulation.define_actions import Actions
 import cv2
 from skimage.draw import line
 from skimage import img_as_float

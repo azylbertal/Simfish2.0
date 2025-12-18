@@ -13,8 +13,7 @@
 # limitations under the License.
 
 import numpy as np
-import geometry_cpp as geometry
-# import geometry
+import simulation.geometry as geometry
 
 class Eye:
 

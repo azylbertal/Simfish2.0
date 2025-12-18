@@ -148,9 +148,6 @@ class Arena:
 
         return new_grating * self.bottom_intensity
 
-
-
-
     def get_global_luminance(self):
         dark_field_length = int(self.arena_height * self.dark_light_ratio)
         luminance_mask = np.ones((self.arena_width, self.arena_height))

@@ -17,20 +17,24 @@ import pymunk
 
 from simulation.eye import Eye
 
-
+PHYS_DAMP = 0.7 ** 50
+FISH_MOMENT_OF_INERTIA_MASS = 140
 class Fish:
 
 
     def __init__(self, env_variables, max_uv_range, rng, actions):
 
         # For the purpose of producing a calibration curve.
-        inertia = pymunk.moment_for_circle(env_variables['fish_mass'], 0, env_variables['fish_head_radius'], (0, 0))
+        inertia = pymunk.moment_for_circle(FISH_MOMENT_OF_INERTIA_MASS, 0, env_variables['fish_head_radius'], (0, 0))
         self.max_uv_range = max_uv_range
         self.env_variables = env_variables
         self.body = pymunk.Body(1, inertia)
         self.rng = rng
         self.actions = actions
         self.num_actions = len(actions)
+        # From mm, should be distance * pixels_per_mm * mass * (1-dampening^dt) / dt
+        phys_dt = self.env_variables['sim_step_duration_seconds'] / self.env_variables['phys_steps_per_sim_step']
+        self.distance_to_impulse_factor = 10 * 1 * (1 - PHYS_DAMP ** phys_dt) / phys_dt
 
         # Mouth
         self.mouth = pymunk.Circle(self.body, env_variables['fish_mouth_radius'], offset=(0, 0))
@@ -69,13 +73,13 @@ class Fish:
         self.touched_predator = False
         self.making_capture = False
         self.capture_possible = False
-        self.prev_action_impulse = 0
+        self.prev_action_distance = 0
         self.prev_action_angle = 0
         self.prev_action = 0
 
         # Energy system (new simulation)
         self.energy_level = 1.0
-        self.i_scaling_energy_cost = self.env_variables['energy_impulse_factor']
+        self.d_scaling_energy_cost = self.env_variables['energy_distance_factor']
         self.a_scaling_energy_cost = self.env_variables['energy_angle_factor']
         self.baseline_energy_use = self.env_variables['energy_baseline']
 
@@ -93,12 +97,11 @@ class Fish:
         return bout_vals[0, 1], bout_vals[0, 0], action['mean'][1], action['mean'][0]
 
     def take_action(self, action_id):
-
         self.prev_action = action_id
 
         if self.env_variables['test_sensory_system']:
             self.body.angle += 0.1
-            self.prev_action_impulse = 0
+            self.prev_action_distance = 0
             self.prev_action_angle = 0
 
         else:
@@ -112,31 +115,17 @@ class Fish:
 
             self.prev_action_angle = angle_change
             self.body.angle += self.prev_action_angle
-            self.prev_action_impulse = self.distance_to_impulse(distance)
-            self.body.apply_impulse_at_local_point((self.prev_action_impulse, 0))
+            self.prev_action_distance = distance
+            self.body.apply_impulse_at_local_point((self.distance_to_impulse_factor * self.prev_action_distance, 0))
 
         if not action_id in range(self.num_actions):
             print("Invalid action given")
-
-
-
-    def distance_to_impulse(self, distance):
-        """
-        Uses the derived distance-mass-impulse relationship to convert an input distance (in mm) to impulse
-        (arbitrary units).
-        :param distance:
-        :return:
-        """
-        # return (distance * 10 - (0.004644 * self.env_variables['fish_mass'] + 0.081417)) / 1.771548
-        # return (distance * 10) * 0.360574383  # From mm
-        return (distance * 10) * 0.34452532909386484  # From mm
-
 
     def update_energy_level(self, consumption):
         """Updates the current energy state for continuous and discrete fish."""
         energy_gain = consumption
 
-        energy_use = self.i_scaling_energy_cost * (abs(self.prev_action_impulse)) + \
+        energy_use = self.d_scaling_energy_cost * (abs(self.prev_action_distance)) + \
                         self.a_scaling_energy_cost * (abs(self.prev_action_angle)) + \
                         self.baseline_energy_use
             
