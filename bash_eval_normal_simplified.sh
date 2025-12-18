@@ -1,1 +1,1 @@
-python evaluate_r2d2_simfish.py --seed=1 --dir=/media/gf/DBIO_Bianco_Lab8/temp_data_storage/gcp_output/stage2_sparse_nohdf5 --subdir=stage2_1 --log_subdir=eval_normal_simplified --env_config_file=/home/asaph/src/simfish2.0/env_config/stage2_normal_env_simplified.json
+python evaluate_r2d2_simfish.py --seed=1 --dir=/media/gf/DBIO_Bianco_Lab8/temp_data_storage/gcp_output/stage2_normal_nohdf5 --subdir=stage2_1 --log_subdir=eval_stage1_simplified --env_config_file=/home/asaph/src/simfish2.0/env_config/stage1_simplified.json

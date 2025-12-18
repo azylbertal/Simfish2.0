@@ -273,6 +273,8 @@ class Actions:
             'color': (0, 0, 0)
         }
         self.actions.append(null_action)
+
+        
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 

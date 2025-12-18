@@ -20,11 +20,9 @@ from dm_env import specs
 from simulation.arena import Arena
 from simulation.fish import Fish
 from acme.wrappers import observation_action_reward
+from simulation.constants import PHYS_DAMP, LARGE_MASS, SMALL_MASS
 
 OAR = observation_action_reward.OAR
-
-
-PHYS_DAMP = 0.7 ** 50
 
 class BaseEnvironment(dm_env.Environment):
     """Base class for the Simfish environment."""
@@ -64,10 +62,13 @@ class BaseEnvironment(dm_env.Environment):
 
         self.space.add(self.fish.body, self.fish.mouth, self.fish.head, self.fish.tail)
 
-        self.prey_impulse_slow = self.env_variables["prey_velocity_slow"] * self.env_variables["prey_mass"] * (1 - PHYS_DAMP ** self.phys_dt)
-        self.prey_impulse_fast = self.env_variables["prey_velocity_fast"] * self.env_variables["prey_mass"] * (1 - PHYS_DAMP ** self.phys_dt)
-        self.prey_impulse_jump = self.env_variables["prey_velocity_jump"] * self.env_variables["prey_mass"] * (1 - PHYS_DAMP ** self.phys_dt)
-        self.predator_impulse = self.env_variables["predator_velocity"] * self.env_variables["predator_mass"] * (1 - PHYS_DAMP ** self.phys_dt)
+        self.prey_impulse_slow = self.env_variables["prey_velocity_slow"] * SMALL_MASS * (1 - PHYS_DAMP ** self.phys_dt)
+        self.prey_impulse_fast = self.env_variables["prey_velocity_fast"] * SMALL_MASS * (1 - PHYS_DAMP ** self.phys_dt)
+        self.prey_impulse_jump = self.env_variables["prey_velocity_jump"] * SMALL_MASS * (1 - PHYS_DAMP ** self.phys_dt)
+        self.prey_inertia = pymunk.moment_for_circle(SMALL_MASS, 0, self.env_variables['prey_radius'], (0, 0))
+
+        self.predator_impulse = self.env_variables["predator_velocity"] * LARGE_MASS * (1 - PHYS_DAMP ** self.phys_dt)
+        self.predator_inertia = pymunk.moment_for_circle(LARGE_MASS, 0, self.env_variables['predator_radius'], (0, 0))
 
         self.prey_shapes = []
         self.prey_cloud_wall_shapes = []
@@ -178,10 +179,10 @@ class BaseEnvironment(dm_env.Environment):
         self.event_survived_predator = False
 
         self.survived_attack = False
-        self.predator_prob = np.zeros(self.env_variables['max_episode_length'])
+        self.predator_prob = np.zeros(self.env_variables['max_sim_steps_per_episode'])
 
         predator_epoch_starts = self.rng.integers(
-            low=self.env_variables['predator_immunity_steps'], high=self.env_variables['max_episode_length'] - self.env_variables['predator_epoch_duration'],
+            low=self.env_variables['predator_immunity_steps'], high=self.env_variables['max_sim_steps_per_episode'] - self.env_variables['predator_epoch_duration'],
             size=self.env_variables['predator_epoch_num'])
         for i in predator_epoch_starts:
             self.predator_prob[i:i + self.env_variables['predator_epoch_duration']] = self.env_variables['predator_probability_per_epoch_step']
@@ -420,7 +421,7 @@ class BaseEnvironment(dm_env.Environment):
         return True
 
     def _create_prey(self, prey_position=None, prey_orientation=None, prey_gait=None, prey_age=None):
-        self.prey_bodies.append(pymunk.Body(self.env_variables['prey_mass'], self.env_variables['prey_inertia']))
+        self.prey_bodies.append(pymunk.Body(SMALL_MASS, self.prey_inertia))
         self.prey_shapes.append(pymunk.Circle(self.prey_bodies[-1], self.env_variables['prey_radius']))
         self.prey_shapes[-1].elasticity = 1.0
         self.prey_bodies[-1].angle = self.rng.uniform(0, np.pi * 2)
@@ -714,7 +715,7 @@ class BaseEnvironment(dm_env.Environment):
             return True
 
     def _create_predator(self):
-        self.predator_body = pymunk.Body(self.env_variables['predator_mass'], self.env_variables['predator_inertia'])
+        self.predator_body = pymunk.Body(LARGE_MASS, self.predator_inertia)
         self.predator_shape = pymunk.Circle(self.predator_body, self.env_variables['predator_radius'])
         self.predator_shape.elasticity = 1.0
 
@@ -900,7 +901,7 @@ class BaseEnvironment(dm_env.Environment):
                         self.available_prey -= 1
 
         self.num_steps += 1
-        if self.num_steps >= self.env_variables["max_episode_length"]:
+        if self.num_steps >= self.env_variables["max_sim_steps_per_episode"]:
             print("Fish ran out of time")
             done = True
             self.recent_cause_of_death = "Time"

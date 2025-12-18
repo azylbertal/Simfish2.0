@@ -14,27 +14,25 @@
 
 import numpy as np
 import pymunk
-
+from simulation.constants import MEDIUM_MASS, PHYS_DAMP, PIXELS_PER_MM
 from simulation.eye import Eye
 
-PHYS_DAMP = 0.7 ** 50
-FISH_MOMENT_OF_INERTIA_MASS = 140
 class Fish:
 
 
     def __init__(self, env_variables, max_uv_range, rng, actions):
 
         # For the purpose of producing a calibration curve.
-        inertia = pymunk.moment_for_circle(FISH_MOMENT_OF_INERTIA_MASS, 0, env_variables['fish_head_radius'], (0, 0))
+        fish_inertia = pymunk.moment_for_circle(MEDIUM_MASS, 0, env_variables['fish_head_radius'], (0, 0))
         self.max_uv_range = max_uv_range
         self.env_variables = env_variables
-        self.body = pymunk.Body(1, inertia)
+        self.body = pymunk.Body(MEDIUM_MASS, fish_inertia)
         self.rng = rng
         self.actions = actions
         self.num_actions = len(actions)
         # From mm, should be distance * pixels_per_mm * mass * (1-dampening^dt) / dt
         phys_dt = self.env_variables['sim_step_duration_seconds'] / self.env_variables['phys_steps_per_sim_step']
-        self.distance_to_impulse_factor = 10 * 1 * (1 - PHYS_DAMP ** phys_dt) / phys_dt
+        self.distance_to_impulse_factor = PIXELS_PER_MM * MEDIUM_MASS * (1 - PHYS_DAMP ** phys_dt) / phys_dt
 
         # Mouth
         self.mouth = pymunk.Circle(self.body, env_variables['fish_mouth_radius'], offset=(0, 0))

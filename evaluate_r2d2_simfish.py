@@ -23,7 +23,7 @@ import dm_env
 import json
 from simulation.simfish_env import BaseEnvironment
 from R2D2Network import make_r2d2_networks
-from define_actions import Actions
+from simulation.define_actions import Actions
 
 
 # Flags which modify the behavior of the launcher.
