@@ -62,7 +62,7 @@
     "salt_concentration_decay": 0.002,
     "reward_predator_caught": -2,
     "reward_predator_avoidance": 2,
-    "reward_consumption": 2,
+    "reward_consumption": 3,
     "reward_energy_use_factor": 10,
     "reward_wall_touch": -2,
     "reward_salt_factor": -0.05,
