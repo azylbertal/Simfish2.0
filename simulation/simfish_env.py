@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import h5py
 import numpy as np
 import pymunk
 import dm_env
@@ -47,7 +48,18 @@ class BaseEnvironment(dm_env.Environment):
         self.space.damping = PHYS_DAMP
 
         self.fish = Fish(env_variables=env_variables, max_uv_range=self.max_uv_range, rng=self.rng, actions=actions)       
-
+        if "prey_stim_file" in self.env_variables:
+            self.prey_stim_file = self.env_variables["prey_stim_file"]
+            with h5py.File(self.prey_stim_file, 'r') as f:
+                self.prey_stim_locations = f['prey_loc'][:]
+        else:
+            self.prey_stim_locations = None
+        if "predator_stim_file" in self.env_variables:
+            self.predator_stim_file = self.env_variables["predator_stim_file"]
+            with h5py.File(self.predator_stim_file, 'r') as f:
+                self.predator_stim_location = f['predator_loc'][:]
+        else:
+            self.predator_stim_location = None
         if self.env_variables["salt"]:
             self.salt_gradient = None
             self.xp, self.yp = np.arange(self.env_variables['arena_width']), np.arange(
@@ -98,6 +110,8 @@ class BaseEnvironment(dm_env.Environment):
         self.energy_level_log = []
         self.salt_concentration = 0
         self.switch_step = None
+        self.fish.left_eye.rng_p = np.random.default_rng(seed=self.rng.integers(0, 10000))
+        self.fish.right_eye.rng_p = np.random.default_rng(seed=self.rng.integers(0, 10000))
 
         if "fish_init_energy_level" in self.env_variables:
             self.fish.energy_level = self.env_variables["fish_init_energy_level"]
@@ -123,13 +137,19 @@ class BaseEnvironment(dm_env.Environment):
             self.fish.body.position = (self.env_variables['arena_width'] / 2, self.env_variables['arena_height'] / 2)
             self.fish.body.angle = 0
         else:
-            self.fish.body.position = (self.rng.integers(self.env_variables['fish_mouth_radius'] + 40,
-                                                        self.env_variables['arena_width'] - (self.env_variables[
-                                                                                                'fish_mouth_radius'] + 40)),
-                                    self.rng.integers(self.env_variables['fish_mouth_radius'] + 40,
-                                                        self.env_variables['arena_height'] - (self.env_variables[
+            if "fish_init_x" in self.env_variables and "fish_init_y" in self.env_variables:
+                self.fish.body.position = (self.env_variables['fish_init_x'], self.env_variables['fish_init_y'])
+            else:
+                self.fish.body.position = (self.rng.integers(self.env_variables['fish_mouth_radius'] + 40,
+                                                            self.env_variables['arena_width'] - (self.env_variables[
+                                                                                                    'fish_mouth_radius'] + 40)),
+                                            self.rng.integers(self.env_variables['fish_mouth_radius'] + 40,
+                                                              self.env_variables['arena_height'] - (self.env_variables[
                                                                                                 'fish_mouth_radius'] + 40)))
-            self.fish.body.angle = self.rng.random() * 2 * np.pi
+            if "fish_init_angle" in self.env_variables:
+                self.fish.body.angle = self.env_variables['fish_init_angle']
+            else:
+                self.fish.body.angle = self.rng.random() * 2 * np.pi
 
         self.fish.body.velocity = (0, 0)
         self.fish.capture_possible = False
@@ -611,9 +631,15 @@ class BaseEnvironment(dm_env.Environment):
             return True
         
     def get_predator_angles_distance(self):
-        if self.predator_body is None:
-            return None, None, None
-        predator_position = self.predator_body.position
+        predator_position = None
+        if self.predator_stim_location is not None:
+            this_predator_stim_location = self.predator_stim_location[0, self.num_steps-1, :]
+            if (this_predator_stim_location[0] != 0) or (this_predator_stim_location[1] != 0):
+                predator_position = this_predator_stim_location
+        if self.predator_body is not None:
+            predator_position = self.predator_body.position
+        if predator_position is None:
+            return np.nan, np.nan, np.nan
         fish_position = self.fish.body.position
         distance = np.sqrt(
             (predator_position[0] - fish_position[0]) ** 2 +
@@ -974,6 +1000,10 @@ class BaseEnvironment(dm_env.Environment):
             predator_bodies = np.array([])
 
         prey_locations = [i.position for i in self.prey_bodies]
+        if self.prey_stim_locations is not None:
+            step_stim_locations = [self.prey_stim_locations[ii, self.num_steps-1, :] for ii in range(self.prey_stim_locations.shape[0])]
+            # remove
+            prey_locations.extend(step_stim_locations)
         masked_sediment = self.arena.get_masked_sediment()
         uv_luminance_mask = self.arena.get_uv_luminance_mask()
 
@@ -982,11 +1012,11 @@ class BaseEnvironment(dm_env.Environment):
         else:
             prey_locations_array = np.array([])
 
-        # check if preditor exists
-        if predator_bodies.size > 0:
-            predator_left, predator_right, predator_distance = self.get_predator_angles_distance()
-        else:
-            predator_left, predator_right, predator_distance = np.nan, np.nan, np.nan
+        # check if predator exists
+        # if predator_bodies.size > 0 or self.
+        predator_left, predator_right, predator_distance = self.get_predator_angles_distance()
+        # else:
+            # predator_left, predator_right, predator_distance = np.nan, np.nan, np.nan
 
         left_photons = self.fish.left_eye.read(masked_sediment, left_eye_pos[0], left_eye_pos[1], self.fish.body.angle, uv_luminance_mask,
                                               prey_locations_array, predator_left, predator_right, predator_distance)

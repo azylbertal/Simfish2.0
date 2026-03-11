@@ -20,7 +20,7 @@ class Eye:
     def __init__(self, verg_angle, retinal_field, is_left, env_variables, max_uv_range,rng):
 
         self.test_mode = env_variables["test_sensory_system"]
-        self.rng = rng
+        self.rng_p = np.random.default_rng(seed=rng.integers(0, 10000)) # Random number generator for the shot noise, to avoid different mean accounts affecting the generator position
         self.viewing_elevations = env_variables["eyes_viewing_elevations"]
         self.fish_elevation = env_variables["fish_elevation"]
         self.uv_object_intensity = env_variables["arena_uv_object_intensity"]
@@ -141,7 +141,7 @@ class Eye:
     def add_noise_to_readings(self, readings):
         """Samples from Poisson distribution to get number of photons"""
         if self.env_variables["eyes_shot_noise"]:
-            photons = self.rng.poisson(readings)
+            photons = self.rng_p.poisson(readings)
         else:
             photons = readings
 

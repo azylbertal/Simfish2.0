@@ -208,6 +208,7 @@ def eval_agent(experiment: config.ExperimentConfig, directory: str, num_episodes
   eval_loop = StateEnvLoop(
       environment,
       eval_actor,
+      should_update=False,
       counter=eval_counter,
       logger=eval_logger,
       observers=[EnvInfoKeep()])

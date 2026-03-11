@@ -103,18 +103,23 @@ class Fish:
             self.prev_action_angle = 0
 
         else:
-            angle_change, distance, mean_angle, mean_distance = self.draw_angle_dist(self.actions[action_id])
-            if self.deterministic_action:
-                angle_change = mean_angle
-                distance = mean_distance
+            if "fish_paralyze" in self.env_variables and self.env_variables["fish_paralyze"]:
+                
+                self.prev_action_distance = 0
+                self.prev_action_angle = 0
+            else:
+                angle_change, distance, mean_angle, mean_distance = self.draw_angle_dist(self.actions[action_id])
+                if self.deterministic_action:
+                    angle_change = mean_angle
+                    distance = mean_distance
 
-            if self.actions[action_id]['is_capture']:
-                self.making_capture = True
+                if self.actions[action_id]['is_capture']:
+                    self.making_capture = True
 
-            self.prev_action_angle = angle_change
-            self.body.angle += self.prev_action_angle
-            self.prev_action_distance = distance
-            self.body.apply_impulse_at_local_point((self.distance_to_impulse_factor * self.prev_action_distance, 0))
+                self.prev_action_angle = angle_change
+                self.body.angle += self.prev_action_angle
+                self.prev_action_distance = distance
+                self.body.apply_impulse_at_local_point((self.distance_to_impulse_factor * self.prev_action_distance, 0))
 
         if not action_id in range(self.num_actions):
             print("Invalid action given")
