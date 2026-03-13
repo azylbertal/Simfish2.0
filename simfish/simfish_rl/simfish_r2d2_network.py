@@ -19,6 +19,7 @@ network architecture tailored for the Simfish environment. The network processes
 from two eyes along with action and reward information.
 Architecture Overview:
 ----------------------
+
 1. **Input Processing (OAREmbedding)**:
   - Takes observation-action-reward (OAR) tuples
   - Processes observations through DeepSimfishTorso
