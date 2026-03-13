@@ -3,10 +3,10 @@ tensorflow==2.8.0
 optax==0.1.7
 dm-env==1.6
 dm-launchpad==0.5.2
-jax==0.4.14
-jaxlib==0.4.14
+jax==0.4.17
+jaxlib==0.4.17
 dm-haiku==0.0.10
-numpy==1.24.3
+numpy==1.25.0
 rlax==0.1.6
 absl-py==1.4.0
 dm-reverb==0.7.2
