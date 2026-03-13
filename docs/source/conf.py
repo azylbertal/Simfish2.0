@@ -39,3 +39,4 @@ source_suffix = {
     '.rst': 'restructuredtext',
     '.md': 'markdown',
 }
+autodoc_mock_imports = ["simulation.geometry"]
