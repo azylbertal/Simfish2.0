@@ -67,6 +67,8 @@ Parameters governing the visual system of the agent.
 | `sz_edge_steepness` | Steepness of the strike zone edge | `5.0` | Float | No |
 | `viewing_elevations` | Angles of bottom viewing (degrees) | `[50, 75]` | List | No |
 
+---
+
 ## 5. Capture swim
 | Name | Meaning | Example Value | Data Type | Optional |
 | :--- | :--- | :--- | :--- | :--- |
@@ -74,7 +76,9 @@ Parameters governing the visual system of the agent.
 | `permissive_angle` | Angle within which capture is allowed (degrees) | `0.785` | Float | No |
 | `energy_cost_scaling` | Multiplier for energy cost during capture | `5` | Float | No |
 
-## 5. Prey
+---
+
+## 6. Prey
 Behavioral variables for prey items (paramecia)
 
 | Name | Meaning | Example Value | Data Type | Optional |
@@ -98,7 +102,9 @@ Behavioral variables for prey items (paramecia)
 | `safe_duration` | Minimal prey lifespan (steps) | `100` | Integer | No |
 | `p_death` | Probability of prey death | `0.001` | Float | No |
 
-## 6. Predator
+---
+
+## 7. Predator
 Behavioral variables for predator items
 
 | Name | Meaning | Example Value | Data Type | Optional |
@@ -114,7 +120,7 @@ Behavioral variables for predator items
 
 ---
 
-## 7. Salt source
+## 8. Salt source
 Salt gradient configuration
 
 | Name | Meaning | Example Value | Data Type | Optional |
@@ -122,7 +128,9 @@ Salt gradient configuration
 | `enabled` | Whether salt gradients are enabled | `true` | Boolean | No |
 | `concentration_decay` | concentration decay constant (1/pixels) | `0.002` | Float | No |
 
-## Rewards
+---
+
+## 9. Rewards
 | Name | Meaning | Example Value | Data Type | Optional |
 | :--- | :--- | :--- | :--- | :--- |
 | `predator_caught` | Penalty for being eaten | `-2` | Integer | No |
@@ -132,8 +140,9 @@ Salt gradient configuration
 | `wall_touch` | Penalty for touching walls | `-2` | Integer | No |
 | `salt_factor` | Factor for salt concentration influence | `-0.05` | Float | No |
 
+---
 
-## 5. Energy
+## 10. Energy
 | Name | Meaning | Example Value | Data Type | Optional |
 | :--- | :--- | :--- | :--- | :--- |
 | `distance_factor` | Energy cost per unit of movement | `0.00023` | Float | No |
