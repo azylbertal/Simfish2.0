@@ -10,4 +10,5 @@ bout_distribution_sam.py
 *.7z
 *.jpg
 *.so
+*.out
 build/

@@ -138,7 +138,9 @@ class Arena:
     This class manages the visual environment including sediment patterns, luminance gradients,
     and fields of view for different spectral channels (red and UV). It provides the spatial
     and lighting conditions that the simulated fish perceive during experiments.
+
     Attributes:
+    -----------
         test_mode (bool): Flag indicating if the arena is in test/sensory system testing mode.
         rng (np.random.Generator): Random number generator for creating stochastic patterns.
         bottom_intensity (float): Base intensity value for the sediment pattern.
@@ -155,7 +157,9 @@ class Arena:
         illuminated_sediment (np.ndarray): Sediment pattern multiplied by luminance mask.
         red_FOV (FieldOfView): Field of view object for red spectral channel.
         uv_FOV (FieldOfView): Field of view object for UV spectral channel.
+    
     Methods:
+    --------
         get_global_sediment(): Generate the base sediment pattern for the entire arena.
         get_global_luminance(): Create the luminance gradient mask for the arena.
         get_masked_sediment(): Retrieve the sediment visible within the red field of view.

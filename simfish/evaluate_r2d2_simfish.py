@@ -1,4 +1,32 @@
 # Copyright 2025 Asaph Zylbertal
+"""
+Evaluation script for R2D2 agent on SimFish environment.
+This module provides functionality to evaluate a trained R2D2 reinforcement learning
+agent on the SimFish simulation environment. It loads a trained model from a checkpoint
+and runs evaluation episodes to assess agent performance.
+Parameters:
+    --dir (str): Results home directory containing the trained models as subdirectories.
+    --subdir (str): Subdirectory for this experiment, typically containing one agent.
+    --log_subdir (str): Subdirectory where evaluation results will be saved under dir/subdir/logs. Required.
+    --env_config_file (str): Path to the YAML configuration file that defines
+        environment parameters. Required.
+    --seed (int): Random seed to use for reproducibility of the evaluation.
+        Default: 42
+    --num_episodes (int): Number of evaluation episodes to run.
+        Default: 100
+Example:
+    python evaluate_r2d2_simfish.py \\
+        --dir=./results \\
+        --subdir=agent_001 \\
+        --log_subdir=eval_logs \\
+        --env_config_file=configs/env_config.yaml \\
+        --seed=42 \\
+        --num_episodes=100
+Functions:
+    read_config_file: Reads and flattens a YAML configuration file.
+    build_experiment_config: Constructs the R2D2 experiment configuration for evaluation.
+    main: Entry point that orchestrates the evaluation process.
+"""
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +40,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Example running R2D2 on fish environment."""
 
 from absl import flags
 from acme.agents.jax import r2d2
@@ -23,7 +50,7 @@ import dm_env
 import yaml
 from simulation import BaseEnvironment, Actions
 from simfish_rl import make_r2d2_networks
-
+from utils import read_config_file
 
 # Flags which modify the behavior of the launcher.
 
@@ -52,19 +79,6 @@ FLAGS = flags.FLAGS
 actions = Actions()
 actions.from_hdf5('simulation/actions_all_bouts_with_null.h5')
 actions_mirror = actions.get_opposing_dict()
-
-def read_config_file(file_path):
-    with open(file_path, 'r') as f:
-        config = yaml.safe_load(f)
-    # flatten the dictionary such that <key1.key2> becomes <key1_key2>
-    flat_config = {}
-    for key, value in config.items():
-        if isinstance(value, dict):
-            for sub_key, sub_value in value.items():
-                flat_config[f"{key}_{sub_key}"] = sub_value
-        else:
-            flat_config[key] = value
-    return flat_config
 
 def build_experiment_config(directory, env_config_file):
   """Builds R2D2 experiment config which can be executed in different ways."""

@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
+import os
+# add parent folder to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+
 import numpy as np
 import matplotlib.pyplot as plt
 import skimage.draw as draw
@@ -22,7 +26,7 @@ from sklearn.decomposition import PCA
 from scipy.signal import detrend
 from scipy.stats import zscore
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
-from simulation import Actions
+from simulation.define_actions import Actions
 import cv2
 from skimage.draw import line
 from skimage import img_as_float
@@ -119,7 +123,7 @@ def draw_lines_with_opacity(image, x_coords, y_coords, colors, L, thickness=5):
     return result_image
 
 actions = Actions()
-actions.from_hdf5('actions_all_bouts_with_null.h5')
+actions.from_hdf5('../simulation/actions_all_bouts_with_null.h5')
 actions = actions.get_all_actions()
 
 class Vanishing_Line(object):
@@ -208,7 +212,7 @@ class DrawingBoard:
         if env_variables["test_sensory_system"]:
             self.dark_light_ratio = 0.5
         self.include_background = include_background
-        if env_variables["salt_enabled"]:
+        if env_variables["salt"]:
             self.salt_location = data["salt_location"][0]
         else:
             self.salt_location = [np.nan, np.nan]
