@@ -2,6 +2,9 @@ Simulating larval zebrafish with deep reinforcement learning to study how artifi
 
 Powered by the DeepMind/Acme implementation of the R2D2 RL algorithm (https://openreview.net/forum?id=r1lyTjAqYX)
 
+Documentation: https://simfish20.readthedocs.io/en/latest/
+
 
 https://github.com/user-attachments/assets/d2474a7b-4080-42a5-a0d4-12d7eba7145b
+
 

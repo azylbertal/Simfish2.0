@@ -26,7 +26,7 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = ['acme']
+exclude_patterns = ['acme', 'setup.py']
 
 
 
