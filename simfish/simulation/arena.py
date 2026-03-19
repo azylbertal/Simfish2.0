@@ -134,37 +134,52 @@ class FieldOfView:
     
 class Arena:
     """
-    Arena class representing the simulated environment for fish behavior experiments.
-    This class manages the visual environment including sediment patterns, luminance gradients,
-    and fields of view for different spectral channels (red and UV). It provides the spatial
-    and lighting conditions that the simulated fish perceive during experiments.
+    Simulated environment for fish behavior experiments.
 
-    Attributes:
-    -----------
-        test_mode (bool): Flag indicating if the arena is in test/sensory system testing mode.
-        rng (np.random.Generator): Random number generator for creating stochastic patterns.
-        bottom_intensity (float): Base intensity value for the sediment pattern.
-        max_uv_range (int): Maximum range in pixels for UV field of view based on light decay.
-        arena_width (int): Width of the arena in pixels.
-        arena_height (int): Height of the arena in pixels.
-        dark_gain (float): Intensity multiplier for the dark region of the arena.
-        light_gradient (int): Width in pixels of the transition zone between dark and light regions.
-        dark_light_ratio (float): Fraction of arena height that is dark (0-1).
-        sediment_sigma (float): Gaussian filter sigma for smoothing sediment patterns.
-        max_red_range (int): Maximum range in pixels for red field of view based on viewing angle.
-        global_sediment_grating (np.ndarray): Full arena sediment pattern before masking.
-        global_luminance_mask (np.ndarray): Full arena luminance/lighting pattern.
-        illuminated_sediment (np.ndarray): Sediment pattern multiplied by luminance mask.
-        red_FOV (FieldOfView): Field of view object for red spectral channel.
-        uv_FOV (FieldOfView): Field of view object for UV spectral channel.
-    
-    Methods:
-    --------
-        get_global_sediment(): Generate the base sediment pattern for the entire arena.
-        get_global_luminance(): Create the luminance gradient mask for the arena.
-        get_masked_sediment(): Retrieve the sediment visible within the red field of view.
-        get_uv_luminance_mask(): Retrieve the luminance mask within the UV field of view.
-        reset(): Regenerate sediment pattern at the start of a new episode.
+    Manages the visual environment including sediment patterns, luminance 
+    gradients, and spectral fields of view (Red and UV). It defines the 
+    spatial and lighting conditions perceived by agents during simulation.
+
+    Parameters
+    ----------
+    env_variables : dict
+        Dictionary containing configuration parameters such as 'arena_width', 
+        'arena_height', 'arena_light_decay_rate', and 'arena_sediment_sigma'.
+    rng : np.random.Generator
+        Random number generator for stochastic sediment pattern generation.
+
+    Attributes
+    ----------
+    test_mode : bool
+        True if the arena is in sensory system testing mode (fixed patterns).
+    arena_width : int
+        Width of the arena in pixels.
+    arena_height : int
+        Height of the arena in pixels.
+    bottom_intensity : float
+        Base intensity value for the sediment pattern.
+    dark_gain : float
+        Intensity multiplier for the dark region of the arena.
+    light_gradient : int
+        Width in pixels of the transition zone between dark and light regions.
+    dark_light_ratio : float
+        Fraction of arena height that is dark (0.0 to 1.0).
+    sediment_sigma : float
+        Gaussian filter sigma for smoothing the stochastic sediment patterns.
+    max_uv_range : int
+        Maximum range in pixels for UV field of view based on light decay.
+    max_red_range : int
+        Maximum range in pixels for red field of view based on viewing angle.
+    global_sediment_grating : np.ndarray
+        The underlying sediment texture (2D array) before lighting is applied.
+    global_luminance_mask : np.ndarray
+        The 2D spatial mask representing light and dark regions.
+    illuminated_sediment : np.ndarray
+        The final visual output (sediment * luminance).
+    red_FOV : FieldOfView
+        Manager for the red channel spectral field of view.
+    uv_FOV : FieldOfView
+        Manager for the UV channel spectral field of view.
     """
 
 
@@ -197,7 +212,17 @@ class Arena:
         self.uv_FOV = FieldOfView(self.max_uv_range, self.arena_width, self.arena_height, env_variables['arena_light_decay_rate'])
 
     def get_global_sediment(self):
+        """
+        Generate the base sediment pattern for the entire arena.
 
+        In test mode, this produces a deterministic vertical grating. In 
+        normal mode, it produces smoothed Gaussian noise.
+
+        Returns
+        -------
+        np.ndarray
+            2D array representing the sediment intensity across the arena.
+        """
         if self.test_mode:
             # In test mode, use a fixed grating for testing purposes
             new_grating = np.zeros((self.arena_width, self.arena_height))
@@ -216,6 +241,17 @@ class Arena:
         return new_grating * self.bottom_intensity
 
     def get_global_luminance(self):
+        """
+        Create the luminance gradient mask for the arena.
+
+        Calculates the transition between dark and light fields based on the 
+        `dark_light_ratio` and `light_gradient` width.
+
+        Returns
+        -------
+        np.ndarray
+            2D array mask of intensity multipliers.
+        """
         dark_field_length = int(self.arena_height * self.dark_light_ratio)
         luminance_mask = np.ones((self.arena_width, self.arena_height))
         if self.light_gradient > 0 and dark_field_length > 0:
@@ -234,15 +270,33 @@ class Arena:
 
 
     def get_masked_sediment(self):
-        """Returns the sediment grating masked by the luminance mask"""
+        """
+        Retrieve the sediment visible within the red field of view.
+
+        Returns
+        -------
+        np.ndarray
+            Sliced and masked image corresponding to the red FOV.
+        """
         return self.red_FOV.get_sliced_masked_image(self.illuminated_sediment)
 
     def get_uv_luminance_mask(self):
-        """Returns the luminance mask for the UV field of view"""
+        """
+        Retrieve the luminance mask within the UV field of view.
+
+        Returns
+        -------
+        np.ndarray
+            Sliced and masked image corresponding to the UV FOV.
+        """
         return self.uv_FOV.get_sliced_masked_image(self.global_luminance_mask)
     
     def reset(self):
-        """To be called at start of episode"""
+        """
+        Regenerate the sediment pattern for a new simulation episode.
+        
+        Resets the `global_sediment_grating` and updates `illuminated_sediment`.
+        """
         self.global_sediment_grating = self.get_global_sediment()
         self.illuminated_sediment = self.global_sediment_grating * self.global_luminance_mask
 
